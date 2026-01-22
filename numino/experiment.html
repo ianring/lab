@@ -1,0 +1,45 @@
+
+<style>
+	.draggable {
+		cursor: hand;
+		opacity: 50%;
+		position:absolute;
+		top: 30px;
+		left:;
+	}
+</style>
+
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam rhoncus, felis dignissim euismod rhoncus, ante justo lacinia ex, sit amet viverra ante eros ut est. Aliquam varius libero mauris, ac cursus dolor sollicitudin nec. Nam pharetra finibus eleifend. Vestibulum vulputate feugiat lectus nec rhoncus. Duis interdum mauris porta sagittis commodo. Pellentesque a mollis odio. Maecenas molestie mattis mi et sodales. Cras non lacinia ligula. Suspendisse tempor efficitur neque, a viverra orci interdum nec. Curabitur sed nunc eu nibh blandit porttitor. Quisque odio augue, elementum sed metus et, mollis suscipit erat.</p>
+
+<p>Duis libero arcu, cursus et gravida a, fermentum id nibh. Nullam ut est vehicula, ornare dui sit amet, tincidunt velit. Sed consequat maximus arcu, eget rutrum metus pretium vel. Cras nec mi ex. Cras tincidunt dolor justo, eget aliquet odio porta at. Curabitur facilisis pellentesque diam, vitae maximus nibh ornare non. Vestibulum a mattis ex. Nulla id vestibulum lorem, at blandit diam.</p>
+
+<p>Vivamus nec justo venenatis, varius odio nec, interdum erat. Quisque consectetur nulla leo, a lacinia quam pulvinar imperdiet. Cras sed odio a sem pulvinar volutpat a eget nibh. Ut eget mauris arcu. In et arcu semper, maximus lacus ut, finibus augue. Maecenas sed lorem molestie, faucibus urna vel, efficitur lacus. Nam vel erat ac ipsum suscipit auctor. Nulla consequat ac nisl et viverra.</p>
+
+<p>Suspendisse efficitur urna at mauris congue, vitae vestibulum lacus lacinia. Maecenas pharetra, turpis vel convallis scelerisque, sem ante tristique leo, id porttitor justo enim quis magna. Suspendisse potenti. Proin congue augue elementum, dignissim ex imperdiet, facilisis turpis. Maecenas ante arcu, vulputate sit amet purus ut, molestie rutrum magna. Cras ac dolor in lorem vestibulum scelerisque in eget mauris. Curabitur tincidunt neque in sapien semper, elementum bibendum est congue. Mauris dapibus augue ac nisi tempus scelerisque. Donec luctus eu diam tincidunt ullamcorper. Sed feugiat pretium mi, eu lacinia eros pharetra in. Etiam elit est, sodales pretium est at, iaculis pretium est. Phasellus non lorem iaculis, auctor quam vitae, lobortis eros. Pellentesque gravida, tortor at commodo sodales, dolor ex suscipit lectus, vitae suscipit arcu ipsum non sapien. Nullam nec vestibulum mi, vulputate molestie orci. In euismod, mauris ac accumsan porttitor, erat tellus tincidunt justo, ut mollis orci ipsum a leo.</p>
+
+<p>Nunc aliquet, risus non iaculis sagittis, magna tellus tincidunt ipsum, ac tincidunt purus tortor sit amet lectus. Mauris enim enim, imperdiet quis orci non, ornare lacinia purus. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Pellentesque nec pretium sem. In pharetra neque sed nunc feugiat faucibus faucibus convallis dui. Vestibulum sit amet lectus libero. Proin elementum, orci nec facilisis blandit, sapien odio ultricies sem, sed pellentesque risus diam eget erat. Sed pharetra ac ante sit amet tempus. Ut tellus nibh, convallis quis leo non, convallis accumsan nisi. In et porta mi, sed venenatis eros. Aliquam maximus commodo ipsum, nec lobortis nulla tristique ac. Morbi in semper mauris. Quisque et aliquam ligula.</p>
+
+<svg class="background" width="400" height="400" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="dropshadow" x="-20%" y="-20%" width="140%" height="140%" filterUnits="userSpaceOnUse">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="4" dy="4" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.4"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <polygon 
+  	class="draggable"
+    points="10,10 30,10 30,20 20,20 20,30 10,30 10,10"
+    fill="#fff"
+    stroke="white"
+    stroke-width="1"
+    filter="url(#dropshadow)"
+  />
+</svg>
