@@ -1,0 +1,188 @@
+body {
+	font-family: sans-serif;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	background: #222;
+	color: white;
+  position: relative;
+}
+
+h1 {
+  font-size: 4rem;
+  margin: 0;
+}
+.east-sea-dokdo-regular {
+  font-family: "East Sea Dokdo", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+#board {
+  width: 90vmin;              /* 90% of the smaller viewport dimension */
+  max-width: 90rem;           /* Limit size on large screens */
+  aspect-ratio: 1 / 1;        /* Keep it square */
+  margin: 0 auto;             /* Center horizontally */
+  display: grid;              /* If using CSS grid for cells */
+  grid-template-columns: repeat(12, 1fr);  /* Example 10×10 grid */
+  gap: 0;                   /* Spacing between cells */
+  background: #222;
+  touch-action: manipulation; /* Improves mobile touch interaction */
+}
+
+.cell {
+  background: white;
+  border: 0.1rem solid #333;
+  aspect-ratio: 1 / 1;        /* Keep it square */
+    background-color: #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 300%;
+    cursor: pointer;
+    color: #222;
+    margin: 0;
+}	
+
+.sum {
+  background-color: #aaa;
+  color: #333;
+  cursor: default;
+}
+.goal {
+  background-color: #99b;
+  color: #333;
+  cursor: default;
+}
+.goal img {
+  width: 60%;
+  height: 60%;
+}
+.empty {
+  border: none;
+  background: #222;
+  cursor: default;
+}
+.occupied {
+  background: #666;
+}
+.forbidden {
+  background: #999;
+}
+.forbidden img {
+  width: 60%;
+}
+
+.color-1 {
+  background: yellow;
+}
+.color-2 {
+  background: green;
+}
+.color-3 {
+  background: indianred;
+}
+.color-4 {
+  background: mediumpurple;
+}
+.color-5 {
+  background: lightblue;
+}
+.color-6 {
+  background: orange;
+}
+.color-6 {
+  background: #f88;
+}
+.color-7 {
+  background: #ccc;
+}
+.color-8 {
+  background: lightyellow;
+}
+.color-9 {
+  background: lightgreen;
+}
+.color-10 {
+  background: lightcyan;
+}
+.color-11 {
+  background: red;
+}
+.color-12 {
+  background: cyan;
+}
+
+
+.block {
+  position: absolute;
+  width: 5rem;
+  height: 5rem;
+  background-color: #333;
+  color: #fff;
+  font-weight: bold;
+  font-size: 300%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0.1rem solid black;
+  cursor: grab;
+  opacity: 0.5;
+}
+
+.draggable {
+  cursor: grabbing;
+  z-index: 9999;
+}
+
+.gameover {
+  background: black;
+  color: white;
+  position: absolute;
+  opacity: 0.8;
+}
+.gameovercontent {
+  padding: 1rem;
+  text-align: center;
+  font-size:1.5rem;
+}
+
+#nav {
+  width: 70rem;
+  display: flex;
+  justify-content: center;
+}
+
+#nav ul {
+  position: relative;
+}
+
+#nav ul li {
+  display: inline-flex;
+  border-radius: 9999rem;
+  padding: 0.4rem 1rem;
+  background: lightblue;
+  color: black;
+  margin-right: 0.4rem;
+  min-width: 1.2rem;
+  justify-content: center;
+  cursor: pointer;
+}
+
+#nav ul li.current {
+  background: red;
+  border: 0.3rem solid white;
+}
+
+.movecount {
+  margin-top: 1rem;
+}
+
+.sharetitle {
+  margin-top: 2rem;
+}
+
+#nextbutton {
+  margin-top: 5rem;
+}

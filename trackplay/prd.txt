@@ -1,0 +1,92 @@
+I'm creating a game based on the classic "trainyard" by Matt Rix. 
+
+What I want is to explore the framework for this game and come up with the strategy for implementing it, and then I want to build the game. The game has important timing elements, interactivity, and animation.
+
+Each level is like a puzzle. There is a grid of 10x10 cells. In each cell, there is either a fixed object, or a configuration of tracks.  Some cells will be prefilled with objects that can not be adjusted; these are Departure Stations (DS) and Arrival Stations (AS), Obstacles (OB), Splitters (SP), and Painters (PT).
+
+The goal of the game is to build tracks in the empty cells, so that trains leave their Departure Stations (DS) and arrive at the Arrival Stations (AS). Every piece of track comes in from one side of a cell, and exits through another. The sides of a cell are called North East South West, indicated by their initials N E S W.
+
+Tracks might go straight across, e.g. N->S or E->W. Or they might curve 90 degrees, e.g. N->E or N->W. 
+
+A cell might have up to two tracks laid across it, in specific allowable combinations. When there are two tracks in a cell, one of them will be represented as being on top of the other. The top track is active, the lower track is inactive. When a train crosses this cell, it will take the active track, and then swap the two tracks. For example, say there is a cell that contains two tracks, the first is N->S and the other is N->E, and the N->S one is the active one. A train approaching this cell from the north will go to the south, and then we would see the tracks switch so the inactive one becomes active and vice versa; so the N-E one goes on top. The next train approaching this cell from the North will go East. 
+
+The constraints for laying track are: 
+- a straight track can combine with any curved track
+- two straight tracks can cross each other at right angles
+- we can not have two curved tracks that are non-overlapping. e.g. N->E and S->W can not share a cell, and neither can N->W and S->E.
+
+At the onset of the puzzle, DS will have dots in them representing trains. A DS may have from 1 to 9 trains in it, represented by 1 to 9 dots. The dots are coloured to represent different train types; more on the colours later.
+
+At the onset of the puzzle, AS will also have dots representing trains that are acceptable. The dots in the DS and AS are not necessarily equivalent. As each matching train arrives at the AS, it uses up one of the matching dots. For example, an AS with three blue dots can accept three blue trains, and nothing more.
+
+The user will place tracks in the empty cells, hoping to solve the puzzle. To check if the puzzle is solved, the user will initiate a Simulation, and launch the trains. The simulation will run and the user can watch the trains move through cells along tracks, to see if they behave as needed to solve the puzzle. The simulation ends when all trains are in the AS (success) or there is a crash (fail). 
+
+The timing of the game happens in ticks. The initial setting will be one tick = 1 second.
+Trains leave the DS once per tick. If there are multiple trains in the DS, they will leave one after another in order, one train per tick. As the trains proceed along the tracks we will see them animate and go from cell to cell.
+
+In each tick, a train will go through their current cell following the track to the next cell.
+The only valid endpoint for a train is an AS with the train's color dot on it.
+If the next cell has no track in it, or if the track doesn't connect properly, that's a Crash.
+If two trains arrive in a cell with a head-on collision (not a merge), that's a crash.
+If a train runs back into a DS, that's a crash.
+If a train runs into an AS that does not have that train's dot, that's a crash.
+If the next cell has another train in it at the same time, and the trains are incompatible (more on this later) that's a Crash.
+When a train crashes, the solution sequence is over and the puzzle is not solved.
+
+The goal is for every train to follow tracks and arrive at an AS with the same coloured dot as the train. If all the trains arrive at an AS, then the puzzle is solved. 
+
+Train Types
+There are 2 types of train: primary and secondary; and 3 subtypes of those. In all comprising 6 types of train. The primary trains are Red, Yellow, Blue; the secondary trains are Orange, Green, Violet; we will call them by their initials R,O,Y,G,B,V. 
+
+Splitter
+If a secondary train goes into a splitter cell, it will be split into its component primary parts. For example, we could lead a track into a splitter, and when an O train goes there it comes out the other side as two trains: Y and R. If a primary train hits a splitter, that's a Crash.
+
+Painter
+Any train that goes through a Painter cell is painted with the colour indicated by the cell. For example, any train can go through a Red painter cell and it becomes a Red train.
+
+Obstacle
+Cells may contain an obstacle. This serves no purpose except taking up space. No tracks can be laid on an obstacle cell.
+
+The primary train colours R Y B can combine with each other the same way that paint colours can, to produce O G V. Secondary trains can be split to produce 2 primary trains.
+
+
+Collision of two trains in one cell
+
+Two trains crossing at right angles is always a Crash.
+Two trains coming into the two ends of the same track will hit head-on; this is always a crash.
+
+It is possible that a cell would have two tracks that share an edge. For example let's imagine a cell where track 1 is N->S, and track 2 is N->E. The two tracks share a side, N.
+If two trains approach this cell from E and S, they would both exit the cell through N. If conditions are right, this could result in the two trains merging together. This operation is essentially the opposite of the "splitter".
+
+If two trains of the same type enter a cell from different edges and leave the cell from the same edge, they will combine to become one train. E.g. two Red trains will become 1 red train.
+
+When two different primary trains merge, they will produce a secondary train. For example, the merge of a red train with a blue train will produce a violet train. This action is crucial to solving many of the puzzles, since trains will need to be timed so they reach a cell at the same time. 
+
+Any other collision will result in a Crash. For example, if an O and a R collide, they are different colours and they can not combine, so it's a crash.
+
+
+The User Interface
+
+The UI will need a play area, consisting of the grid of cells. This is where the user will draw the track, and where they will play the solution.
+Above the grid, there should be a title bar at the top, indicating the name of the puzzle, and a difficulty rating. At the bottom below the grid we need an area that indicates the current status of the solution as it is running, and a button the user will press to start and stop the solution simulation. I also need a slider that will adjust the speed of the simulation. 
+
+
+== THE PLAN ==
+
+First, I would like you to develop a high level architecture for the project. This is the stack:
+
+- PHP
+- MySQL
+- Javascript, specifically using the jQuery framework
+- CSS
+
+All the cell "tiles" will be rendered as SVG, and I already have PHP code that can render every possible content of a cell as an SVG file.
+
+I would like you to plan a data model for representing the board at any particular point in time, what exists in each cell, and data representing the position and direction of each train.
+
+Then I want a strategy for how the game will run its simulation, proceeding from one tick to the next, launching trains one at a time out of each DS, moving trains along tracks, switching tracks in a cell, detecting crashes, and detecting a successful solve.
+
+Let's do all this with a hard-coded beginning state, so that we can get all the game mechanics working. 
+
+Then, once the simulation is working, we can work on the UI of allowing the user to draw tracks and solve the puzzle. 
+
