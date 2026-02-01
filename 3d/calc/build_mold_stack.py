@@ -11,6 +11,8 @@ WALL_THICKNESS = 15.0         # Plaster wall thickness around the mug
 KEY_RADIUS = 8.0              # Registration key radius
 KEY_OFFSET_MM = 2.0           # Clearance
 MOLD_BLOCK_SIDES_MARGIN = 40.0 # Extra width for the plaster block
+MOLD_FLOOR_THICKNESS = 30.0    # Thickness of the plaster floor for the bottom piece
+MOLD_FLOOR_THICKNESS = 30.0    # Thickness of the plaster floor for the bottom piece
 GALLERY_WIDTH = 20.0          # Width of the reservoir lip
 GALLERY_HEIGHT = 20.0         # Height of the reservoir
 
@@ -175,6 +177,12 @@ def build_stack(project_name, slices_dir, output_dir):
         part_height = z_max - z_min
         z_center = (z_max + z_min) / 2
         
+        # Floor Logic (Bottom Slice Only)
+        if i == 0:
+            print("  Adding Floor to Bottom Level...")
+            part_height += MOLD_FLOOR_THICKNESS
+            z_center -= (MOLD_FLOOR_THICKNESS / 2)
+
         # Create Block (Uniform Size)
         block_size = [GLOBAL_BLOCK_WIDTH, GLOBAL_BLOCK_WIDTH, part_height]
         block = trimesh.creation.box(extents=block_size)
