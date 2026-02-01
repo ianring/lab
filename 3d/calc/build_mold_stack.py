@@ -10,7 +10,7 @@ TARGET_MUG_HEIGHT_MM = 150.0  # Overall height of the final positive
 WALL_THICKNESS = 15.0         # Plaster wall thickness around the mug
 KEY_RADIUS = 8.0              # Registration key radius
 KEY_OFFSET_MM = 2.0           # Clearance
-MOLD_BLOCK_SIDES_MARGIN = 30.0 # Extra width for the plaster block
+MOLD_BLOCK_SIDES_MARGIN = 40.0 # Extra width for the plaster block
 GALLERY_WIDTH = 20.0          # Width of the reservoir lip
 GALLERY_HEIGHT = 20.0         # Height of the reservoir
 
@@ -101,90 +101,82 @@ def build_stack(project_name, slices_dir, output_dir):
         scaled_slices.append(pts_scaled)
         actual_max_radius = max(actual_max_radius, np.max(xs))
         
-    block_width = (actual_max_radius + WALL_THICKNESS) * 2
-    print(f"Mold Block Width: {block_width:.2f} mm")
-
-    # Keep track of all parts for the full assembly
-    stack_meshes = []
-
-    # 3. Generate Geometry
+    # 3. Pre-process slices to add Gallery and find Global Max Width
+    
+    final_slices_data = []
+    global_max_r = 0
     
     num_slices = len(scaled_slices)
     
     for i, pts in enumerate(scaled_slices):
-        print(f"Generating Mold Level {i}...")
-        
-        # Prepare profile for solid revolution
         top_y = pts[-1, 1]
         bottom_y = pts[0, 1]
         
-        # GALLERY LOGIC (Top Slice Only)
+        # Add Gallery to Top Slice
         if i == num_slices - 1:
-            print("Adding Gallery to Top Slice...")
-            # The "brim" is the last point in pts (highest Y, since we inverted? or lowest?)
-            # We ordered Y so that max_y_global-y makes 0 at bottom and Max at Top.
-            # So the last point in 'pts' should be the highest Z (top of mug).
-            # Let's verify start/end. 
-            # Slice 0 is bottom. Slice N is top.
-            # pts inside a slice: usually ordered along curve.
-            # If curve went bottom-up, last point is top.
-            
+            print("Adding Gallery to Top Slice Data...")
             brim_point = pts[-1]
             brim_r, brim_z = brim_point[0], brim_point[1]
             
-            # Create extension points matching user sketch:
-            # 1. Start at brim
-            # 2. Go Horizontal OUT (Shelf)
-            # 3. Go UP and OUT (Flared rim)
-            
             GALLERY_FLARE = 10.0
-            
             p_shelf = [brim_r + GALLERY_WIDTH, brim_z]
             p_top   = [brim_r + GALLERY_WIDTH + GALLERY_FLARE, brim_z + GALLERY_HEIGHT]
             
-            # Append gallery points
             pts = np.vstack([pts, p_shelf, p_top])
-            
-            # Update top_y to be the new highest point
-            top_y = p_top[1] 
-            
-            # Also update block width for this level
-            current_max_r = max(np.max(pts[:, 0]), actual_max_radius)
-            local_block_width = (current_max_r + WALL_THICKNESS) * 2
-            
-        else:
-            local_block_width = block_width
-            
-        
+            top_y = p_top[1]
+
+        # Close the loop
         closed_pts = np.vstack([
             pts,
             [0, top_y],
             [0, bottom_y],
-            pts[0] # Close back to start
+            pts[0]
         ])
+        
+        # Track max radius
+        current_r = np.max(pts[:, 0])
+        global_max_r = max(global_max_r, current_r)
+        
+        final_slices_data.append({
+            'pts': closed_pts,
+            'top_y': top_y,
+            'bottom_y': bottom_y
+        })
+        
+    # Calculate Uniform Block Width
+    # Ensure it covers the widest part (Gallery) + Walls
+    GLOBAL_BLOCK_WIDTH = (global_max_r + MOLD_BLOCK_SIDES_MARGIN) * 2
+    # Ensure it's at least enough for the wall thickness too
+    min_width = (global_max_r + WALL_THICKNESS) * 2
+    GLOBAL_BLOCK_WIDTH = max(GLOBAL_BLOCK_WIDTH, min_width)
+    
+    print(f"Global Mold Block Width: {GLOBAL_BLOCK_WIDTH:.2f} mm")
+
+    stack_meshes = []
+
+    # 4. Generate Geometry
+    for i, data in enumerate(final_slices_data):
+        print(f"Generating Mold Level {i}...")
+        
+        closed_pts = data['pts']
         
         # Revolve
         mug_part = trimesh.creation.revolve(closed_pts, sections=128)
         mug_part.fix_normals()
         
-        # Add to stack
         stack_meshes.append(mug_part)
         
-        # Export Positive Shape
         out_pos = os.path.join(output_dir, f"{project_name}_level_{i}_positive.stl")
         mug_part.export(out_pos)
         
-        # ... (rest of mold generation) ...
-        # ... (inside the loop) ...
-
-        # Bounds of this part
+        # Bounds
         bounds = mug_part.bounds 
         z_min, z_max = bounds[0][2], bounds[1][2]
         part_height = z_max - z_min
         z_center = (z_max + z_min) / 2
         
-        # Create Block
-        block_size = [local_block_width, local_block_width, part_height]
+        # Create Block (Uniform Size)
+        block_size = [GLOBAL_BLOCK_WIDTH, GLOBAL_BLOCK_WIDTH, part_height]
         block = trimesh.creation.box(extents=block_size)
         block.apply_translation([0, 0, z_center])
         
@@ -194,8 +186,78 @@ def build_stack(project_name, slices_dir, output_dir):
             print(f"Boolean difference failed: {e}")
             continue
 
+        # --- VERTICAL KEYS (Between Levels) ---
+        # Bumps on TOP face, Holes on BOTTOM face.
+        # Place at 4 corners of the margin area.
+        
+        v_key_offset = (GLOBAL_BLOCK_WIDTH / 2) - (MOLD_BLOCK_SIDES_MARGIN / 2)
+        v_key_z_top = z_max
+        v_key_z_bot = z_min
+        
+        # 4 Corners
+        v_locs = [
+            [v_key_offset, v_key_offset],
+            [v_key_offset, -v_key_offset],
+            [-v_key_offset, v_key_offset],
+            [-v_key_offset, -v_key_offset]
+        ]
+        
+        # Create Vertical Keys Geometry
+        sphere_v = trimesh.creation.icosphere(radius=KEY_RADIUS, subdivisions=3)
+        
+        # Add Bumps to Top (if not last level)
+        if i < num_slices - 1:
+            print("  Adding Vertical Keys (Top)...")
+            keys_top = []
+            for xy in v_locs:
+                loc = [xy[0], xy[1], v_key_z_top]
+                keys_top.append(sphere_v.copy().apply_translation(loc))
+            
+            keys_top_geom = trimesh.util.concatenate(keys_top)
+            mold_solid = mold_solid.union(keys_top_geom)
+
+        # Cut Holes in Bottom (if not first level)
+        if i > 0:
+            print("  Adding Vertical Keyholes (Bottom)...")
+            keys_bot = []
+            for xy in v_locs:
+                loc = [xy[0], xy[1], v_key_z_bot]
+                keys_bot.append(sphere_v.copy().apply_translation(loc))
+                
+            keys_bot_geom = trimesh.util.concatenate(keys_bot)
+            mold_solid = mold_solid.difference(keys_bot_geom)
+
+        # --- SPLIT LEFT/RIGHT ---
         right_half = trimesh.intersections.slice_mesh_plane(mold_solid, plane_normal=[-1, 0, 0], plane_origin=[0, 0, 0], cap=True)
         left_half = trimesh.intersections.slice_mesh_plane(mold_solid, plane_normal=[1, 0, 0], plane_origin=[0, 0, 0], cap=True)
+
+        # ADD REGISTRATION KEYS (Left/Right)
+        # Place keys on the X=0 plane.
+        
+        # FIX: Place keys further out, in the "margin" area, to avoid hitting the mug void.
+        # Margin is MOLD_BLOCK_SIDES_MARGIN.
+        
+        edge_dist = GLOBAL_BLOCK_WIDTH / 2
+        safe_margin_center = MOLD_BLOCK_SIDES_MARGIN / 2
+        key_y_offset = edge_dist - safe_margin_center
+        
+        k1_loc = [0, key_y_offset, z_center]
+        k2_loc = [0, -key_y_offset, z_center]
+        
+        sphere = trimesh.creation.icosphere(radius=KEY_RADIUS, subdivisions=3)
+        
+        key1 = sphere.copy().apply_translation(k1_loc)
+        key2 = sphere.copy().apply_translation(k2_loc)
+        
+        keys = key1.union(key2)
+        
+        # Apply Keys:
+        # Right Half Gets Male (Union)
+        # Left Half Gets Female (Difference)
+        
+        print("Applying Registration Keys...")
+        right_half = right_half.union(keys)
+        left_half = left_half.difference(keys)
 
         out_l = os.path.join(output_dir, f"{project_name}_level_{i}_left.stl")
         out_r = os.path.join(output_dir, f"{project_name}_level_{i}_right.stl")
