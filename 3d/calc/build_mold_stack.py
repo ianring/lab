@@ -11,6 +11,8 @@ WALL_THICKNESS = 15.0         # Plaster wall thickness around the mug
 KEY_RADIUS = 8.0              # Registration key radius
 KEY_OFFSET_MM = 2.0           # Clearance
 MOLD_BLOCK_SIDES_MARGIN = 30.0 # Extra width for the plaster block
+GALLERY_WIDTH = 20.0          # Width of the reservoir lip
+GALLERY_HEIGHT = 20.0         # Height of the reservoir
 
 def load_slice_svg(filename):
     # Use svgpathtools to load the path reliably
@@ -105,14 +107,54 @@ def build_stack(project_name, slices_dir, output_dir):
     # Keep track of all parts for the full assembly
     stack_meshes = []
 
+    # 3. Generate Geometry
+    
+    num_slices = len(scaled_slices)
+    
     for i, pts in enumerate(scaled_slices):
         print(f"Generating Mold Level {i}...")
-        
-        # ... (previous code) ...
         
         # Prepare profile for solid revolution
         top_y = pts[-1, 1]
         bottom_y = pts[0, 1]
+        
+        # GALLERY LOGIC (Top Slice Only)
+        if i == num_slices - 1:
+            print("Adding Gallery to Top Slice...")
+            # The "brim" is the last point in pts (highest Y, since we inverted? or lowest?)
+            # We ordered Y so that max_y_global-y makes 0 at bottom and Max at Top.
+            # So the last point in 'pts' should be the highest Z (top of mug).
+            # Let's verify start/end. 
+            # Slice 0 is bottom. Slice N is top.
+            # pts inside a slice: usually ordered along curve.
+            # If curve went bottom-up, last point is top.
+            
+            brim_point = pts[-1]
+            brim_r, brim_z = brim_point[0], brim_point[1]
+            
+            # Create extension points matching user sketch:
+            # 1. Start at brim
+            # 2. Go Horizontal OUT (Shelf)
+            # 3. Go UP and OUT (Flared rim)
+            
+            GALLERY_FLARE = 10.0
+            
+            p_shelf = [brim_r + GALLERY_WIDTH, brim_z]
+            p_top   = [brim_r + GALLERY_WIDTH + GALLERY_FLARE, brim_z + GALLERY_HEIGHT]
+            
+            # Append gallery points
+            pts = np.vstack([pts, p_shelf, p_top])
+            
+            # Update top_y to be the new highest point
+            top_y = p_top[1] 
+            
+            # Also update block width for this level
+            current_max_r = max(np.max(pts[:, 0]), actual_max_radius)
+            local_block_width = (current_max_r + WALL_THICKNESS) * 2
+            
+        else:
+            local_block_width = block_width
+            
         
         closed_pts = np.vstack([
             pts,
@@ -142,7 +184,7 @@ def build_stack(project_name, slices_dir, output_dir):
         z_center = (z_max + z_min) / 2
         
         # Create Block
-        block_size = [block_width, block_width, part_height]
+        block_size = [local_block_width, local_block_width, part_height]
         block = trimesh.creation.box(extents=block_size)
         block.apply_translation([0, 0, z_center])
         
