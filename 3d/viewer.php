@@ -34,9 +34,20 @@ window.onload = function() {
     scene.add(grid);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-    const pointLight = new THREE.PointLight(0xffffff, 1);
-    pointLight.position.set(200, 500, 200);
-    scene.add(pointLight);
+
+    const topLight = new THREE.PointLight(0xffffff, 1);
+    topLight.position.set(200, 500, 200);
+    scene.add(topLight);
+
+    // Positioned at -500 on the Y axis to shine UP at the bottom of the floor
+    const bottomLight = new THREE.PointLight(0xffffff, 0.6);
+    bottomLight.position.set(0, -500, 0); 
+    scene.add(bottomLight);    
+
+    // 3. Optional: Add a HemisphereLight for better "ambient" fills
+    // This mimics light reflecting off a floor or walls
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
+    scene.add(hemiLight);
 
     const loader = new THREE.STLLoader();
     loader.load(fileToLoad, function (geometry) {
