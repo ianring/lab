@@ -1,0 +1,998 @@
+/* VT323 comes from Google Fonts; the <link> is in partials/header.php. */
+
+:root {
+  --bg: #0c0e0d;
+  --surface: #131714;
+  --surface-2: #1a201c;
+  --line: #2c352f;
+  --line-soft: rgba(44, 53, 47, .75);
+  --text: #d7f2e0;
+  --muted: #6f8d7c;
+  --accent: #3dff85;
+  --accent-dim: #1e8a4c;
+  --phosphor: #39ff88;
+  --cool: #56c8d8;
+  --ok: #3dff85;
+  --warn: #ffc24a;
+  --hot: #ff5b3a;
+  --led: #ff2f14;          /* the panel readout stays its real red */
+  --radius: 4px;
+
+  /* The app speaks in a terminal font; the controller panel keeps its own. */
+  --font-ui: 'VT323', ui-monospace, SFMono-Regular, "Courier New", monospace;
+  --font-panel: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+/* A class that sets `display` outranks the browser's own [hidden] rule, so
+   anything hidden in markup or by script needs this to actually go away. */
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background:
+    /* faint scanlines, the way a phosphor tube never sits perfectly flat */
+    repeating-linear-gradient(180deg, rgba(61, 255, 133, .022) 0 1px, transparent 1px 3px),
+    var(--bg);
+  color: var(--text);
+  font: 19px/1.45 var(--font-ui);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+h1, h2, h3 { line-height: 1.2; margin: 0 0 .5rem; font-weight: 400; }
+h2 {
+  font-size: 1.4rem; letter-spacing: .02em; color: var(--accent);
+  text-shadow: 0 0 12px rgba(61, 255, 133, .28);
+}
+h3 { font-size: 1.15rem; }
+p { margin: 0 0 .75rem; line-height: 1rem;}
+a { color: var(--accent); }
+strong { font-weight: 400; color: #eaffef; }
+
+/* ---------- chrome ---------- */
+
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem;
+  padding: .7rem 1rem;
+  padding-top: calc(.7rem + env(safe-area-inset-top));
+  background: rgba(12, 14, 13, .94);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  display: flex; align-items: center; gap: .5rem;
+  color: var(--accent); text-decoration: none;
+  letter-spacing: .06em; text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(61, 255, 133, .35);
+}
+.brand-mark {
+  width: 10px; height: 14px; border-radius: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(61, 255, 133, .9);
+  animation: blink 1.4s steps(1) infinite;
+}
+@keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: .15; } }
+@media (prefers-reduced-motion: reduce) { .brand-mark { animation: none; } }
+/* Autosave state, parked in the sticky bar so it is always in view. */
+.save-status {
+  flex: 0 1 auto; min-width: 0;
+  font-size: .8rem; letter-spacing: .04em;
+  color: var(--muted); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.save-status::before { content: "\25CF"; margin-right: .3rem; }
+.save-status--saving { color: var(--warn); }
+.save-status--saved  { color: var(--accent); }
+.save-status--error  {
+  color: var(--hot); white-space: normal;
+  cursor: pointer; text-decoration: underline dotted;
+}
+.save-status--error::before { content: "\2715"; }
+
+.topbar nav { display: flex; gap: .15rem; align-items: center; }
+.topbar nav a {
+  color: var(--muted); text-decoration: none;
+  padding: .35rem .55rem; border-radius: 999px; font-size: .88rem;
+  white-space: nowrap;
+}
+/* On a phone the nav needs the room more than the wordmark does. */
+@media (max-width: 460px) {
+  .brand { font-size: 0; gap: 0; }
+  .topbar { padding-left: .6rem; padding-right: .6rem; gap: .4rem; }
+  .topbar nav a { padding: .35rem .45rem; font-size: .84rem; }
+}
+.topbar nav a.on { color: var(--accent); background: #10331f; }
+.topbar nav a.nav-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 34px; padding: 0;
+}
+.topbar nav a.nav-icon svg { transition: transform .35s ease; }
+.topbar nav a.nav-icon:hover svg, .topbar nav a.nav-icon.on svg { transform: rotate(60deg); }
+
+/* signed-in user */
+.avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 1px solid var(--accent-dim); object-fit: cover; display: block;
+}
+.avatar--letter {
+  display: flex; align-items: center; justify-content: center;
+  background: #10331f; color: var(--accent); font-size: .9rem; line-height: 1;
+}
+.avatar--large { width: 56px; height: 56px; }
+.avatar--tiny { width: 18px; height: 18px; display: inline-block; vertical-align: -3px; }
+.user-cell { display: inline-flex; align-items: center; gap: .4rem; }
+.users-table td { vertical-align: middle; }
+.pager {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem; margin-top: .75rem;
+}
+
+/* "Fired by": the name box appears when the user picks "Someone else". */
+.firer-name { margin-top: .4rem; }
+.firer-name[hidden] { display: none; }
+.nav-me { width: 30px; }
+.profile-head { display: flex; align-items: center; gap: .75rem; }
+.profile-head h2 { margin-bottom: .1rem; }
+
+.signin { text-align: center; max-width: 26rem; margin: 3rem auto 1rem; }
+/* The sign-in failure diagnostics: same column as the card, but readable. */
+.signin-why { max-width: 26rem; margin: 0 auto 1rem; text-align: left; }
+.signin-why .manifest { margin-top: .6rem; }
+.signin-google { max-width: 20rem; margin: 1rem auto .25rem; }
+.setup-steps { text-align: left; padding-left: 1.2rem; font-size: .95rem; color: var(--muted); }
+.setup-steps li { margin-bottom: .6rem; }
+.redirect-uri { display: inline-block; margin-top: .2rem; word-break: break-all; }
+
+/* manifest pages */
+.pill {
+  flex: 0 0 auto;
+  font-size: .68rem; text-transform: uppercase; letter-spacing: .08em;
+  padding: .2rem .55rem; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
+}
+.pill--computer { color: var(--accent); border-color: var(--accent-dim); background: rgba(61,255,133,.12); }
+.pill--manual { color: var(--cool); border-color: #2c5a62; background: rgba(86,200,216,.12); }
+
+.manifest { display: grid; gap: .5rem; margin: .75rem 0 0; }
+.manifest div {
+  display: grid; grid-template-columns: 8.5rem 1fr; gap: .5rem;
+  padding-bottom: .5rem; border-bottom: 1px solid var(--line-soft);
+}
+.manifest dt { font-size: .78rem; color: var(--muted); }
+.manifest dd { margin: 0; font-size: .9rem; }
+@media (max-width: 420px) {
+  .manifest div { grid-template-columns: 1fr; gap: .1rem; }
+}
+
+.quirks { margin: .25rem 0 0; padding-left: 1.1rem; font-size: .88rem; }
+.quirks li { margin-bottom: .4rem; }
+.kiln-actions { margin: 1rem 0 0; }
+
+/* settings page */
+.setting--changed > label { color: var(--accent); }
+code {
+  font-family: inherit;
+  color: var(--accent);
+  font-size: 1em; background: rgba(61,255,133,.07);
+  border: 1px solid var(--line); border-radius: 2px; padding: 0 .3em;
+}
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+main { max-width: 720px; margin: 0 auto; padding: 1rem .85rem 3rem; }
+
+.foot {
+  max-width: 720px; margin: 0 auto; padding: 0 .85rem 2rem;
+  color: var(--muted); font-size: .8rem;
+}
+
+/* ---------- cards ---------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.card.danger { border-color: #4a2a24; }
+
+.record-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: .75rem; flex-wrap: wrap;
+}
+.muted { color: var(--muted); font-size: .85rem; }
+.hint { color: var(--muted); font-size: .82rem; line-height: 1rem; margin: .35rem 0 0; }
+.right { text-align: right; }
+
+/* ---------- forms ---------- */
+
+.field { margin-bottom: .9rem; }
+.field > label {
+  display: block; font-size: .8rem; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); margin-bottom: .3rem;
+}
+
+/* Every text-ish input, or the odd one out renders as a browser default. */
+input[type=text], input[type=number], input[type=datetime-local], input[type=date],
+input[type=time], input[type=tel], input[type=email], input[type=search],
+select, textarea {
+  width: 100%;
+  padding: .55rem .6rem;
+  font-size: 1rem;
+  color: var(--accent);
+  background: #0a0d0b;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-family: inherit;
+}
+input::placeholder, textarea::placeholder { color: #40584a; }
+
+/* The browser draws the calendar/clock button in near-black, which disappears
+   on a dark field. The filter chain tints that black glyph mid-green. */
+input[type=datetime-local]::-webkit-calendar-picker-indicator,
+input[type=date]::-webkit-calendar-picker-indicator,
+input[type=time]::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+  filter: invert(58%) sepia(58%) saturate(520%) hue-rotate(85deg) brightness(96%) contrast(92%);
+}
+input[type=datetime-local]::-webkit-calendar-picker-indicator:hover,
+input[type=date]::-webkit-calendar-picker-indicator:hover,
+input[type=time]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(72%) sepia(70%) saturate(700%) hue-rotate(85deg) brightness(108%);
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--accent-dim); outline-offset: 1px;
+}
+textarea { resize: vertical; }
+
+.grid-2, .grid-3 { display: grid; gap: .75rem; }
+@media (min-width: 520px) {
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* While the plan is worked out again, dim it rather than blanking it — the old
+   answer stays readable and nothing jumps under your finger. */
+#plan-results { transition: opacity .12s ease; }
+#plan-results.replanning { opacity: .45; }
+
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chip span {
+  display: inline-block;
+  padding: .3rem .55rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface-2);
+  font-size: .9rem;
+  cursor: pointer;
+}
+.chip span em { font-style: normal; color: var(--muted); font-size: .75rem; }
+.chip input:checked + span {
+  border-color: var(--accent);
+  background: #10331f;      /* solid dark green, not a tint over whatever is behind */
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(61, 255, 133, .5);
+}
+.chip input:focus-visible + span { outline: 2px solid var(--accent); }
+.chips--wide span { padding: .3rem .5rem; }
+
+.btn {
+  display: inline-block;
+  padding: .5rem 1rem;
+  font: inherit;
+  color: var(--accent);
+  background: var(--surface-2);
+  border: 1px solid var(--accent-dim);
+  border-radius: 3px;
+  cursor: pointer;
+  text-decoration: none;
+  letter-spacing: .04em;
+}
+.btn:hover { border-color: var(--accent); box-shadow: 0 0 12px rgba(61,255,133,.18); }
+.btn--primary {
+  width: 100%;
+  background: #10331f;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-size: 1.2rem;
+  padding: .6rem 1rem;
+  border-radius: 7px;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(61, 255, 133, .45);
+}
+.btn--primary::before { content: "> "; }
+.btn--primary { margin-top: 1.25rem; }
+
+/* The main action breathes, like a cursor waiting on a terminal. Brightness
+   only — nothing moves, so it does not drag the eye off what you are reading. */
+@keyframes pulse-text {
+  0%, 100% { color: #2fbf65; text-shadow: none; }
+  50%      { color: #9dffc4; text-shadow: 0 0 14px rgba(61, 255, 133, .7), 0 0 4px rgba(61, 255, 133, .5); }
+}
+.btn--primary { animation: pulse-text 3.2s ease-in-out infinite; }
+.btn--primary:hover, .btn--primary:focus-visible {
+  animation-play-state: paused;
+  color: #9dffc4;
+  text-shadow: 0 0 14px rgba(61, 255, 133, .7);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn--primary { animation: none; }
+}
+.btn--ghost { background: transparent; color: var(--muted); }
+.btn--tiny { padding: .25rem .5rem; font-size: .8rem; color: var(--muted); }
+.linkish { color: var(--accent); text-decoration: none; border-bottom: 1px dotted; }
+
+.alert {
+  padding: .7rem .85rem; border-radius: 10px; font-size: .9rem;
+  border: 1px solid var(--line); margin-bottom: 1rem;
+}
+.alert--warn { background: rgba(255, 194, 74, .1); border-color: #6b5220; color: var(--warn); }
+/* A problem that stops the plan being saved, as opposed to one worth knowing. */
+.alert--stop { background: rgba(255, 91, 58, .12); border-color: #7d2d16; color: var(--hot); }
+.alert--ok { background: rgba(61, 255, 133, .1); border-color: var(--accent-dim); color: var(--accent); }
+
+/* ---------- the answer ---------- */
+
+.answer .big-number {
+  display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
+  margin: .5rem 0 .75rem;
+  padding: .9rem 1rem;
+  background: #080b09;
+  border: 1px solid var(--accent-dim);
+  border-radius: 3px;
+}
+.big-label {
+  font-size: .85rem; letter-spacing: .18em; text-transform: uppercase; color: var(--muted);
+}
+.big-value {
+  font-size: 3.2rem; line-height: 1;
+  color: var(--phosphor);
+  text-shadow: 0 0 22px rgba(57, 255, 136, .55), 0 0 6px rgba(57, 255, 136, .45);
+}
+.answer-lede { font-size: 1.02rem; line-height: 1rem; }
+.alt { color: var(--muted); font-size: .9rem; line-height: 1rem; border-top: 1px dashed var(--line); padding-top: .6rem; }
+.answer--too_late .big-value { color: var(--warn); text-shadow: none; }
+
+.facts { display: grid; gap: .6rem; margin: .5rem 0 0; grid-template-columns: 1fr 1fr; }
+.facts div { min-width: 0; }
+.facts dt { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.facts dd { margin: 0; font-weight: 600; }
+
+/* ---------- timeline ---------- */
+
+.tl { margin: .25rem 0 1rem; }
+.tl-track {
+  position: relative; height: 42px;
+  background: #080b09;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.tl-seg {
+  position: absolute; top: 0; bottom: 0;
+  display: flex; align-items: center;
+  padding: 0 .4rem;
+  font-size: .78rem; white-space: nowrap; overflow: hidden;
+  color: #041008;
+  border-right: 1px solid rgba(0, 0, 0, .5);
+}
+.tl-seg span { overflow: hidden; text-overflow: ellipsis; }
+.tl-seg--ramp    { background: #14432a; color: #7fdca4; }
+.tl-seg--preheat { background: #1f7f4a; color: #d7f2e0; }
+.tl-seg--program { background: var(--accent); box-shadow: 0 0 16px rgba(61,255,133,.35); }
+.tl-seg--hold    { background: #b8ff6a; color: #0d1a05; box-shadow: 0 0 16px rgba(184,255,106,.45); }
+.tl-seg--cooling { background: #16323a; color: var(--cool); }
+.tl-seg--unload  { background: #4a3a12; color: #ffd98a; }
+
+.tl-track--presence {
+  height: 22px; margin-top: 4px; background: transparent; border: none;
+}
+/* Across 48 hours a visit is a sliver — an hour is about 2% of the width — so
+   the band carries only its number, and the names live in the list below. A
+   minimum width keeps the digit legible however short the visit is. */
+.tl-band {
+  position: absolute; top: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 20px;
+  background: repeating-linear-gradient(45deg, rgba(61,255,133,.35) 0 6px, rgba(61,255,133,.1) 6px 12px);
+  border: 1px solid var(--accent-dim);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.tl-band span {
+  font-size: .8rem; line-height: 1; color: var(--accent);
+  text-shadow: 0 0 4px rgba(0,0,0,.9);
+}
+
+.tl-visits {
+  list-style: none; display: flex; flex-wrap: wrap; gap: .1rem .9rem;
+  margin: .35rem 0 0; padding: 0;
+  font-size: .85rem; color: var(--muted);
+}
+.tl-visits li { display: flex; align-items: baseline; gap: .3rem; }
+.tl-visit-number {
+  display: inline-block; min-width: 1.15em; text-align: center;
+  background: var(--accent); color: #06210f; border-radius: 2px;
+  font-size: .78rem; line-height: 1.3;
+}
+.tl-visit-name { color: var(--text); }
+.tl-visit-time { color: var(--accent); }
+.tl-axis {
+  display: flex; justify-content: space-between;
+  font-size: .72rem; color: var(--muted); margin-top: .3rem;
+}
+
+.markers { list-style: none; margin: 0; padding: 0; }
+.marker-day {
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--muted); margin: 1rem 0 .35rem; border-bottom: 1px solid var(--line); padding-bottom: .25rem;
+}
+.marker {
+  display: flex; gap: .75rem; padding: .55rem 0;
+}
+/* The rule between two points carries the time between them. */
+.marker-gap {
+  display: flex; align-items: center; gap: .6rem;
+  margin: .1rem 0 .1rem 5.35rem;
+  font-size: .68rem; color: var(--muted); letter-spacing: .04em;
+  white-space: nowrap;
+}
+.marker-gap::before, .marker-gap::after {
+  content: ""; flex: 1 1 auto; height: 1px;
+  background: var(--line);
+}
+.marker-gap::before { flex-grow: 0; width: .75rem; }
+.marker time {
+  flex: 0 0 4.6rem;
+  font-size: .95rem; color: var(--accent); padding-top: .1rem;
+}
+.marker strong { display: block; font-weight: 600; }
+.marker p { margin: .15rem 0 0; font-size: .82rem; color: var(--muted); }
+.marker-kind {
+  display: inline-block; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase;
+  padding: .1rem .4rem; border-radius: 4px; margin-bottom: .15rem;
+  background: var(--surface-2); color: var(--muted); border: 1px solid var(--line);
+}
+.marker--presence .marker-kind { color: var(--accent); border-color: var(--accent-dim); background: rgba(61,255,133,.12); }
+.marker--finish .marker-kind { color: var(--hot); border-color: #7d2d16; background: rgba(255,91,58,.14); }
+.marker--cooling .marker-kind { color: var(--cool); border-color: #2c5a62; background: rgba(86,200,216,.12); }
+.marker--deadline .marker-kind { color: var(--warn); border-color: #6b5220; background: rgba(255,194,74,.12); }
+
+/* ---------- controller ---------- */
+
+/* The controller is a reproduction of a real object — it keeps its own
+   typeface and colours rather than joining the green-screen theme. */
+.controller, .controller * { font-family: var(--font-panel); }
+.controller {
+  background: linear-gradient(180deg, #14120f, #0a0908);
+  border: 1px solid #35302a;
+  border-radius: 10px;
+  padding: .9rem .8rem 1rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), 0 6px 20px rgba(0,0,0,.4);
+}
+.controller-brand {
+  display: flex; align-items: center; justify-content: center; gap: .5rem;
+  margin-bottom: .7rem;
+}
+.controller-brand span {
+  font-size: 1.05rem; font-weight: 800; letter-spacing: .06em; color: #f4efe6;
+}
+.controller-sun { width: 34px; height: 21px; flex: 0 0 auto; }
+
+.controller-head {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 1fr) 2.6fr auto;
+  gap: .5rem; align-items: center;
+}
+.controller-units {
+  display: flex; flex-direction: column; justify-content: space-between;
+  align-self: stretch; padding: .15rem 0;
+  font-size: .7rem; color: #f4efe6; font-weight: 700;
+}
+.controller-units em { font-style: normal; font-weight: 400; font-size: .58rem; color: #b9ada0; }
+.controller-legend {
+  font-size: .58rem; color: #b9ada0; margin: .2rem 0 .8rem;
+  letter-spacing: .02em;
+}
+
+.controller-body {
+  display: grid;
+  grid-template-columns: minmax(3.4rem, .8fr) 2.4fr minmax(3.4rem, .9fr);
+  gap: .5rem; align-items: start;
+}
+.controller-col { display: flex; flex-direction: column; gap: .7rem; }
+.key-block { display: flex; flex-direction: column; gap: .25rem; }
+.key-heading {
+  font-size: .55rem; font-weight: 700; letter-spacing: .04em;
+  color: #f0c33c; text-transform: uppercase; line-height: 1.15;
+}
+.key-heading--right { text-align: right; }
+.key-group { display: flex; gap: .3rem; }
+.key-group--stack { flex-direction: column; }
+.controller-display {
+  border: 1px solid #000;
+  border-radius: 8px;
+  margin-bottom: .8rem;
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, .9), 0 1px 0 rgba(255,255,255,.05);
+  overflow: hidden;
+  line-height: 0;
+}
+
+/* 7-segment readout drawn by lib/led.php */
+.led { display: block; width: 100%; height: auto; }
+/* Unlit segments paint nothing at all. They stay in the DOM so JavaScript can
+   light them, but filling them — even in the background colour — puts opaque
+   shapes inside the filtered group, and those paint over the bloom spilling
+   off neighbouring lit segments. */
+.led-seg { fill: none; }
+.led-seg.on { fill: #ff2f14; }
+.led--small { max-width: 12rem; }
+
+/* display test page */
+.led-demo { max-width: 16rem; margin: .5rem 0 1rem; }
+.led-grid {
+  display: grid; gap: .75rem;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  margin: .5rem 0 0;
+}
+.led-grid--tight { grid-template-columns: repeat(auto-fill, minmax(4.2rem, 1fr)); }
+.led-grid figure { margin: 0; }
+.led-grid figcaption {
+  margin-top: .3rem; text-align: center;
+  font-size: .9rem; color: var(--muted);
+}
+.keypad { display: flex; flex-direction: column; gap: .35rem; }
+.keypad-row { display: flex; gap: .35rem; }
+.keypad-row--bottom { margin-top: .6rem; }
+
+/* Light grey keys with a soft bevel, like the real membrane buttons. */
+.key {
+  flex: 1 1 0;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  min-height: 42px;
+  padding: .25rem;
+  font-size: 1.05rem; font-weight: 700; line-height: 1.05;
+  color: #23211e;
+  background: linear-gradient(180deg, #eae7e1, #b9b5ad);
+  border: 1px solid #8d8880;
+  border-radius: 7px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.85), 0 1px 2px rgba(0,0,0,.5);
+  transition: background .15s, box-shadow .15s, transform .1s, color .15s;
+}
+.key--span2 { flex: 2.05 1 0; font-size: .82rem; letter-spacing: .04em; }
+.key--small { font-size: .62rem; font-weight: 700; min-height: 34px; letter-spacing: .01em; }
+.key--speed { font-size: .68rem; font-weight: 700; min-height: 38px; }
+.key--start {
+  align-self: stretch; min-height: 52px;
+  font-size: .95rem; letter-spacing: .02em;
+}
+.key.lit {
+  background: linear-gradient(180deg, #b6ffd2, #3dff85);
+  border-color: #dcffe9;
+  color: #06210f;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 0 22px rgba(61, 255, 133, .8);
+  transform: translateY(1px);
+}
+.controller-model {
+  margin-top: .8rem; text-align: center;
+  font-size: .55rem; letter-spacing: .04em; color: #6e675f;
+}
+
+@media (max-width: 420px) {
+  .key { font-size: .95rem; min-height: 38px; }
+  .key--small { font-size: .55rem; min-height: 30px; }
+  .key--speed { font-size: .6rem; min-height: 34px; }
+  .controller-body { gap: .35rem; }
+}
+
+.walk {
+  margin-top: 1rem; padding: .85rem;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+}
+.walk-head {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  margin-bottom: .5rem;
+}
+.walk-head span { font-size: .78rem; color: var(--muted); letter-spacing: .05em; }
+.walk-buttons { display: flex; gap: .4rem; }
+.walk-buttons .btn { padding: .45rem .85rem; font-size: .85rem; }
+.walk p { margin: 0; color: var(--muted); font-size: .9rem; }
+
+/* Tickable confirmations that belong to one walkthrough step. */
+.step-checks { list-style: none; margin: .6rem 0 0; padding: 0; }
+.step-checks li { border-top: 1px solid var(--line-soft); }
+.step-checks .check { padding: .4rem .1rem; }
+.step-checks .check-text { font-size: .95rem; }
+.walk-subchecks {
+  margin: .3rem 0 0; padding-left: 1rem;
+  list-style: square; color: var(--muted); font-size: .82rem;
+}
+
+.walk-all { margin: 1rem 0 0; padding-left: 1.1rem; color: var(--muted); font-size: .85rem; }
+.walk-all li { margin-bottom: .55rem; }
+.walk-all strong { color: var(--text); }
+.walk-all p { margin: .2rem 0 0; font-size: .82rem; }
+.walk-all li.optional strong { color: var(--muted); font-weight: 600; }
+.walk-display {
+  display: inline-block; margin-left: .4rem;
+  font-size: .95rem; color: var(--led);
+  background: #0d0402; border: 1px solid #3a1109; border-radius: 2px; padding: 0 .35rem;
+  text-shadow: 0 0 8px rgba(255, 47, 20, .55);
+}
+.tag {
+  display: inline-block; margin-left: .35rem; padding: 0 .35rem;
+  font-size: .78rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--warn); background: rgba(255,194,74,.12); border: 1px solid #6b5220; border-radius: 2px;
+}
+
+/* ---------- checklist ---------- */
+
+.progress {
+  height: 6px; border-radius: 3px; background: var(--surface-2);
+  overflow: hidden; margin: .5rem 0 1rem;
+}
+.progress span {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  transition: width .2s;
+}
+.phase {
+  margin: 1.25rem 0 .5rem;
+  font-size: .78rem; text-transform: uppercase; letter-spacing: .12em; color: var(--accent);
+}
+.checks { list-style: none; margin: 0; padding: 0; }
+.checks li { border-bottom: 1px solid var(--line-soft); }
+.check {
+  display: flex; gap: .7rem; align-items: flex-start;
+  padding: .7rem .2rem; cursor: pointer;
+}
+.check input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.check .box {
+  flex: 0 0 auto;
+  width: 24px; height: 24px; margin-top: 1px;
+  border: 1px solid var(--accent-dim); border-radius: 2px;
+  background: #0a0d0b;
+  position: relative;
+}
+.check input:checked + .box {
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(61, 255, 133, .3) inset;
+}
+.check input:checked + .box::after {
+  content: "X";
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent); font-size: 1.25rem; line-height: 1;
+  text-shadow: 0 0 8px rgba(61, 255, 133, .7);
+}
+.check input:focus-visible + .box { outline: 2px solid var(--accent); outline-offset: 2px; }
+.check-text { font-size: .93rem; }
+.check-text em { display: block; font-style: normal; color: var(--muted); font-size: .8rem; margin-top: .15rem; }
+.check input:checked ~ .check-text { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(111,141,124,.6); }
+.check input:checked ~ .check-text em { text-decoration: none; }
+.check--inline { border-bottom: 1px solid var(--line-soft); }
+
+/* ---------- tables, lists ---------- */
+
+.steps-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.steps-table th {
+  text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); font-weight: 600; padding: .35rem .4rem; border-bottom: 1px solid var(--line);
+}
+.steps-table td { padding: .5rem .4rem; border-bottom: 1px solid var(--line-soft); }
+.inline { display: inline; }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-scroll .steps-table { min-width: 30rem; }
+.drift-late { color: var(--warn); }
+.drift-early { color: var(--cool); }
+
+.filters { display: flex; gap: .5rem; margin: .5rem 0 .25rem; flex-wrap: wrap; }
+.filters select { flex: 1 1 8rem; width: auto; padding: .5rem; font-size: .9rem; }
+
+.temp-form { display: flex; gap: .5rem; margin-top: .75rem; flex-wrap: wrap; }
+.temp-form input[type=number] { flex: 0 0 5.5rem; }
+.temp-when-field { position: relative; flex: 1 1 11rem; display: flex; }
+.temp-when-field input[type=datetime-local] { padding-right: 4.2rem; }
+/* Sits beside the browser's own calendar button and fills in the current time.
+   The gap has to clear that button, which is about 1.5rem wide. */
+.now-button {
+  position: absolute; right: 2.6rem; top: 50%; transform: translateY(-50%);
+  padding: .1rem .35rem;
+  font: inherit; font-size: .8rem; line-height: 1;
+  color: var(--accent); background: #10331f;
+  border: 1px solid var(--accent-dim); border-radius: 2px;
+  cursor: pointer;
+}
+.now-button:hover { border-color: var(--accent); }
+
+/* ---------- temperature chart ---------- */
+
+.chart-figure { margin: .5rem 0 1rem; }
+.temp-chart { display: block; width: 100%; height: auto; }
+.chart-grid { stroke: #1e2b23; stroke-width: 1; }
+.chart-axis { fill: var(--muted); font-family: inherit; font-size: 13px; }
+.chart-area { fill: rgba(61, 255, 133, .12); }
+.chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-point { fill: var(--accent); stroke: #080b09; stroke-width: 2; }
+.chart-last { fill: var(--text); font-family: inherit; font-size: 15px; }
+.chart-target { stroke: var(--warn); stroke-width: 1; stroke-dasharray: 5 4; opacity: .8; }
+.chart-target-label { fill: var(--warn); font-family: inherit; font-size: 12px; }
+
+.test-sms {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  margin-top: .9rem; padding-top: .9rem; border-top: 1px solid var(--line-soft);
+}
+.test-sms .hint { margin: 0; flex: 1 1 12rem; }
+
+/* ---------- calendar ---------- */
+
+.views { display: flex; gap: .3rem; font-size: .85rem; }
+.views a {
+  padding: .15rem .5rem; border-radius: 3px;
+  border: 1px solid var(--line); color: var(--muted); text-decoration: none;
+}
+.views a.on { border-color: var(--accent); background: #10331f; color: var(--accent); }
+.month-nav { justify-content: space-between; margin-bottom: .75rem; }
+
+.cal {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  background: var(--line); border: 1px solid var(--line); border-radius: 3px;
+  overflow: hidden;
+}
+.cal-head {
+  background: var(--surface-2); color: var(--muted);
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+  text-align: center; padding: .3rem 0;
+}
+.cal-day {
+  background: var(--surface); min-height: 4.4rem;
+  padding: .2rem; display: flex; flex-direction: column; gap: 2px;
+}
+.cal-day--outside { background: #0e120f; }
+.cal-day--outside .cal-date { opacity: .35; }
+.cal-day--today { box-shadow: inset 0 0 0 1px var(--accent); }
+.cal-date { font-size: .8rem; color: var(--muted); }
+.cal-day--today .cal-date { color: var(--accent); }
+
+.cal-booking {
+  display: flex; align-items: baseline; gap: .25rem;
+  padding: .1rem .25rem; border-radius: 2px;
+  font-size: .7rem; line-height: 1.15; text-decoration: none;
+  border-left: 3px solid transparent;
+  overflow: hidden;
+}
+.cal-kiln { font-weight: 400; }
+.cal-what { color: inherit; opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The booking day is the loud one; the shoulders are quieter. */
+.cal-booking--booking { background: #10331f; border-left-color: var(--accent); color: var(--accent); }
+.cal-booking--access  { background: rgba(61,255,133,.06); border-left-color: var(--accent-dim); color: var(--muted); }
+.cal-booking--clear   { background: rgba(255,194,74,.07); border-left-color: #6b5220; color: var(--warn); }
+
+.cal-key { list-style: none; margin: .75rem 0 0; padding: 0; font-size: .82rem; color: var(--muted); }
+.cal-key li { display: flex; align-items: center; gap: .4rem; margin-bottom: .2rem; }
+.swatch { width: 14px; height: 12px; border-radius: 2px; border-left: 3px solid; flex: 0 0 auto; }
+.swatch--booking { background: #10331f; border-left-color: var(--accent); }
+.swatch--access  { background: rgba(61,255,133,.06); border-left-color: var(--accent-dim); }
+.swatch--clear   { background: rgba(255,194,74,.07); border-left-color: #6b5220; }
+
+@media (max-width: 560px) {
+  .cal-day { min-height: 3.4rem; }
+  .cal-what { display: none; }
+  .cal-booking { font-size: .75rem; justify-content: center; }
+}
+
+/* ---------- the three visits ---------- */
+
+/* The tabs stand between two cards now, so they carry the card rhythm. */
+.visits { display: flex; gap: .35rem; margin-bottom: 1rem; }
+.visit-tab {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: .1rem;
+  padding: .45rem .3rem;
+  border: 1px solid var(--line); border-radius: 3px;
+  background: var(--surface-2); color: var(--muted);
+  text-decoration: none; text-align: center;
+}
+.visit-tab.on { border-color: var(--accent); background: #10331f; color: var(--accent); }
+.visit-number { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; }
+.visit-name { font-size: 1rem; color: var(--text); }
+.visit-tab.on .visit-name { color: var(--accent); }
+.visit-count { font-size: .78rem; }
+.visit-count.complete { color: var(--accent); }
+
+.visit-when .facts { margin-bottom: .75rem; }
+/* A disclosure that has to look like something you press. */
+.whole-schedule > summary {
+  display: flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .5rem 1rem;
+  font: inherit; letter-spacing: .04em;
+  color: var(--accent);
+  background: var(--surface-2);
+  border: 1px solid var(--accent-dim);
+  border-radius: 3px;
+  cursor: pointer;
+  /* Both of these are needed to be rid of the browser's own triangle. */
+  list-style: none;
+}
+.whole-schedule > summary::-webkit-details-marker { display: none; }
+.whole-schedule > summary .when-open { display: none; }
+.whole-schedule[open] > summary .when-closed { display: none; }
+.whole-schedule[open] > summary .when-open { display: inline; }
+.whole-schedule > summary::after {
+  content: '\25be';
+  font-size: 1.35rem; line-height: 1;
+  transition: transform .15s ease;
+}
+.whole-schedule[open] > summary::after { transform: rotate(180deg); }
+.whole-schedule[open] > summary { margin-bottom: .75rem; }
+.whole-schedule .markers { margin-top: .5rem; }
+
+/* ---------- witness cone pack ---------- */
+
+.cone-pack {
+  margin: .5rem 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #080b09;
+  padding: .5rem .4rem .4rem;
+}
+.cone-pack-figure, .cone-diagram { display: block; width: 100%; height: auto; }
+
+.cone-arc, .cone-ray { fill: none; stroke: #26402f; stroke-width: 1; }
+.cone-ray-label { fill: #3f6b52; font-size: 9px; font-family: inherit; }
+.cone-base { fill: #14331f; stroke: #2c6b45; stroke-width: 1; }
+.cone-base-hole { fill: #0b1a11; }
+.cone-body { display: none; fill: var(--accent); }
+.cone-body.on { display: block; filter: drop-shadow(0 0 5px rgba(61, 255, 133, .55)); }
+.cone-number { fill: #8fd9ab; font-size: 13px; font-family: inherit; }
+.cone-temp { fill: #5d7f6c; font-size: 11px; font-family: inherit; }
+
+/* One stepper under each cone, on the same rhythm as the drawing above. */
+.cone-steppers {
+  display: grid;
+  grid-template-columns: repeat(var(--cone-slots, 3), 1fr);
+  gap: .3rem;
+  margin-top: .35rem;
+}
+.cone-stepper {
+  display: flex; align-items: center; justify-content: center; gap: .25rem;
+}
+.cone-stepper .btn { padding: .1rem .45rem; line-height: 1.1; }
+.cone-state {
+  min-width: 2.2rem; text-align: center;
+  font-size: .95rem; color: var(--accent); white-space: nowrap;
+}
+
+/* Logged readings. Each row is its own form: a tap swaps the text for fields
+   and turns the delete button into save. */
+.temps { list-style: none; margin: .5rem 0 0; padding: 0; }
+.temps li { border-bottom: 1px solid var(--line-soft); }
+.temp-row {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .45rem .2rem;
+  cursor: pointer;
+}
+.temp-row .temp-when { flex: 1 1 auto; min-width: 0; }
+/* The date is context, not the reading — keep it out of the way. */
+.temp-date { color: #476a58; margin-right: .45rem; }
+.temp-time { color: var(--text); }
+.temp-row span.temp-c { flex: 0 0 auto; }
+.temp-row .temp-edit { display: none; }
+.temp-row.editing { cursor: default; }
+.temp-row.editing .temp-view { display: none; }
+.temp-row.editing input.temp-edit { display: block; }
+.temp-row.editing input.temp-when { flex: 1 1 9rem; }
+.temp-row.editing input.temp-c { flex: 0 0 5rem; }
+.temp-row .temp-action { flex: 0 0 auto; min-width: 2.2rem; }
+.temp-row .glyph-edit { display: none; }
+.temp-row.editing .glyph-view { display: none; }
+.temp-row.editing .glyph-edit { display: inline; }
+.temp-row.editing .temp-action { color: var(--accent); border-color: var(--accent); }
+
+.firing-list { list-style: none; margin: .5rem 0 0; padding: 0; }
+.firing-list li {
+  display: flex; align-items: center; gap: .5rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.firing-list .fl-link {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: .75rem;
+  padding: .75rem .2rem; color: var(--text); text-decoration: none;
+}
+.fl-actions { flex: 0 0 auto; display: flex; gap: .3rem; align-items: center; }
+.fl-actions .btn { padding: .4rem .55rem; }
+.btn--danger { color: var(--hot); border-color: #5c2b20; }
+.btn--danger:hover { border-color: var(--hot); box-shadow: 0 0 12px rgba(255,91,58,.2); }
+.backlink { margin: -.25rem 0 .75rem; font-size: .9rem; }
+.backlink a { text-decoration: none; }
+.fl-date { flex: 0 0 5rem; font-size: .8rem; color: var(--muted); }
+.fl-main { flex: 1 1 auto; min-width: 0; }
+.fl-main strong { display: block; font-size: .95rem; }
+.fl-main .muted { display: block; }
+.fl-progress { flex: 0 0 auto; font-size: .8rem; color: var(--muted); }
+
+.start-log p { color: var(--muted); font-size: .9rem; }
+
+/* ---------- hover and focus ----------
+   Gated on a real pointer. On a touch screen a :hover style sticks after a tap
+   until you touch something else, which reads as a stuck selection — so phones
+   get none of this. Focus styles are not gated: they matter everywhere. */
+
+@media (hover: hover) and (pointer: fine) {
+  a:hover { color: #9dffc4; }
+
+  .topbar nav a:hover { color: var(--accent); background: rgba(61, 255, 133, .08); }
+  .topbar nav a.on:hover { background: #16472a; }
+
+  .linkish:hover { color: #9dffc4; border-bottom-style: solid; }
+
+  .btn:hover { color: #9dffc4; }
+  .btn--ghost:hover, .btn--tiny:hover { color: var(--accent); border-color: var(--accent-dim); }
+
+  /* Whole rows that act as one target. */
+  .firing-list li:hover { background: rgba(61, 255, 133, .05); }
+  .firing-list li:hover .fl-main strong { color: var(--accent); }
+  .temps li:hover { background: rgba(61, 255, 133, .05); }
+  .temp-row:not(.editing):hover .temp-time { color: var(--accent); }
+
+  /* Choices. */
+  .chip span:hover { border-color: var(--accent-dim); color: #9dffc4; }
+  .chip input:checked + span:hover { border-color: var(--accent); background: #16472a; }
+  .check:hover .box { border-color: var(--accent); }
+  .check:hover .check-text { color: #eaffef; }
+
+  .visit-tab:hover { border-color: var(--accent-dim); }
+  .visit-tab:hover .visit-name { color: var(--accent); }
+  .views a:hover { border-color: var(--accent-dim); color: var(--accent); }
+
+  /* Calendar. */
+  .cal-booking:hover { filter: brightness(1.35); }
+  .cal-day:hover .cal-date { color: var(--accent); }
+
+  .whole-schedule > summary:hover { border-color: var(--accent); box-shadow: 0 0 12px rgba(61,255,133,.18); }
+  .cone-stepper .btn:hover { background: #10331f; }
+  .nav-me:hover .avatar { border-color: var(--accent); }
+  .save-status--error:hover { color: #ff8a70; }
+}
+
+/* Keyboard focus, on every device — the browser default is invisible here. */
+a:focus-visible,
+.btn:focus-visible,
+summary:focus-visible,
+.visit-tab:focus-visible,
+.views a:focus-visible,
+.cal-booking:focus-visible,
+.fl-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ---------- type scale ----------
+   VT323 has a small x-height and no bold, so sizes tuned for a normal UI font
+   come out too small to read at arm's length in a kiln room. Everything that
+   was fine print gets a step up. The controller panel is exempt: it keeps its
+   own sans-serif and its own sizes. */
+.hint, .muted, .foot, .marker p, .quirks, .walk p, .walk-all,
+.manifest dd, .start-log p, .answer-lede, .alt, .alert,
+.steps-table, .chip span, .fl-main strong, .fl-main .muted {
+  font-size: .95rem;
+}
+.field > label, .facts dt, .manifest dt, .marker-day, .tl-axis,
+.fl-date, .fl-progress, .btn--tiny, .led-grid figcaption, .marker-gap {
+  font-size: .85rem;
+}
+.marker-kind, .pill, .tag, .steps-table th { font-size: .8rem; }
+.facts dd, .marker strong, .check-text { font-size: 1rem; }
+.marker time { font-size: 1.05rem; }
+.check-text em { font-size: .9rem; }
+.tl-seg, .tl-band { font-size: .82rem; }
+.topbar nav a { font-size: 1.05rem; }
+@media (max-width: 460px) { .topbar nav a { font-size: 1rem; } }

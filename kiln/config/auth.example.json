@@ -1,0 +1,9 @@
+{
+    "_readme": "Google sign-in. Copy this to config/auth.json on the server and fill it in — auth.json holds a client secret and is never committed. Create the credentials at https://console.cloud.google.com/apis/credentials: OAuth client ID, type 'Web application'. Paste the redirect URI that login.php shows you into 'Authorised redirect URIs' there, exactly as given.",
+
+    "client_id": "",
+    "client_secret": "",
+
+    "_redirect_uri": "Leave blank and the app works it out from the request. Set it only if the app sits behind a proxy that rewrites the host.",
+    "redirect_uri": ""
+}

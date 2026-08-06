@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MC Hammer</title>
+
+<!--
+  Not linked from anywhere in the app. Open it directly: /hammer.html
+
+  Self-contained on purpose — it borrows the app's colours and font but not
+  its stylesheet, so it keeps working wherever it ends up.
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0e0d;
+    --phosphor: #3dff85;
+  }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background:
+      /* the same faint scanlines the app wears */
+      repeating-linear-gradient(180deg, rgba(61, 255, 133, .022) 0 1px, transparent 1px 3px),
+      var(--bg);
+    color: var(--phosphor);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* The stage is exactly 80 characters wide, so the type shrinks to fit
+     rather than the stage wrapping or scrolling. */
+  pre {
+    margin: 0;
+    font-family: 'VT323', ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+    font-size: clamp(6px, 2.3vw, 22px);
+    line-height: 1.2;
+    white-space: pre;
+    text-shadow: 0 0 12px rgba(61, 255, 133, .45);
+  }
+</style>
+</head>
+<body>
+
+<pre id="stage" aria-label="An ASCII figure dancing across the screen"></pre>
+
+<script>
+(function () {
+  'use strict';
+
+  // One step per second: the figure advances a column and changes pose.
+  var INTERVAL = 1000;
+  var WIDTH    = 80;
+
+  // Four frames: arms up, arms right, arms out, arms left. Seven columns
+  // each. The pants are the one thing that never changes.
+  var FRAMES = [
+    ['  \\o/  ', '   |   ', ' /===\\ ', ' d   b '],
+    ['   o__ ', '  /|   ', ' /===\\ ', '  d b  '],
+    ['   o   ', '  /|\\  ', ' /===\\ ', ' b   d '],
+    [' __o   ', '   |\\  ', ' /===\\ ', '  b d  ']
+  ];
+
+  var FIGURE = FRAMES[0][0].length;
+  var SPAN   = WIDTH - FIGURE;
+
+  var stage = document.getElementById('stage');
+  var x = 0;
+  var direction = 1;
+  var frame = 0;
+
+  function draw() {
+    var pad = ' '.repeat(x);
+    // Every line is padded out to the full width so the stage never changes
+    // size as he moves — otherwise the whole block would drift.
+    stage.textContent = FRAMES[frame]
+      .map(function (row) { return (pad + row).padEnd(WIDTH, ' '); })
+      .join('\n');
+  }
+
+  function step() {
+    draw();
+    x += direction;
+    if (x <= 0 || x >= SPAN) {
+      direction = -direction;   // bounce off the edge rather than wrap
+    }
+    frame = (frame + 1) % FRAMES.length;
+  }
+
+  step();
+  setInterval(step, INTERVAL);
+}());
+</script>
+
+</body>
+</html>

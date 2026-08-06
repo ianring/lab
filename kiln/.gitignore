@@ -1,0 +1,14 @@
+# Live data and hand-edited manifests belong to the server, not the repo.
+# Only the .example copies are tracked; uploading the app must never be able to
+# clobber edits made on the server — and auth.json holds a client secret.
+data/firings.json
+data/firings.json.tmp
+data/settings.json
+data/settings.json.tmp
+data/users.json
+data/users.json.tmp
+data/sessions/
+config/kilns.json
+config/auth.json
+config/db.php
+config/sms.php

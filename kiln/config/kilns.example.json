@@ -1,0 +1,102 @@
+{
+    "_readme": "Kiln manifest. Hand-edited on disk; the app reads it and shows it read-only at kilns.php. Blank fields are hidden in the UI, so fill in what you know next time you are in the kiln room. Any extra field you add to a kiln shows up automatically, with its name tidied up for the label.",
+
+    "studio": {
+        "name": "Waterloo Potter's Workshop",
+        "room": "Basement kiln room",
+        "notes": [
+            "Room intake and output fans run off the thermostat on the wall between kilns 2 and 3. The individual switch at each fan must be left on for the thermostat to control them.",
+            "Kiln fans are wired in pairs: kilns 1 and 2 exhaust together, kilns 3 and 4 exhaust together. Both kilns in a pair vent whether or not both are firing.",
+            "The panel box holds a numbered breaker switch for each kiln. Check yours is on before firing.",
+            "The floor must be dry to fire. If it has rained, check the red pail under the pipes to the right of the sink, empty it, and email the convener.",
+            "The sink has no clay trap. Nothing with clay, glaze or kiln wash in it goes down that drain.",
+            "Central vacuum outlet is just outside the furnace room. Vacuuming the kiln after every firing is mandatory.",
+            "Kiln convener and kiln maintenance contacts are posted on the bulletin board at the bottom of the stairs.",
+            "Bookings run 48 hours. Load no earlier than 6 pm the evening before your firing day; unload and clean up by 6 pm on the last day."
+        ]
+    },
+
+    "kilns": [
+        {
+            "id": "1",
+            "name": "Kiln 1",
+            "kind": "manual",
+            "blurb": "R-85 with LT-3K kiln sitter",
+            "make": "",
+            "model": "R-85",
+            "controller": "LT-3K Kiln-Sitter with backup timer",
+            "power_switch": "Push in the time sitter switch to power the elements — the red light comes on",
+            "element_settings": "OFF, LO, 2, 4, 6, HI — up by 2 every hour",
+            "venting": "Exhausts together with kiln 2",
+            "cones": "Small kiln-sitter cone in the sitter (top shelf), plus witness cone packs at the peeps",
+            "max_cone": "",
+            "chamber": "",
+            "shelves": "",
+            "posts": "",
+            "thermocouples": "",
+            "quirks": [
+                "The OFF position sits a little left of 12 o'clock. There is a pink dot of nail polish marking the right spot.",
+                "Set the sitter timer 30 minutes to 1 hour beyond the firing length you expect — it is a backstop, the sitter cone is what actually ends the firing.",
+                "The wall pyrometer is not very accurate, but it tells you the kiln is working.",
+                "You must stay at the workshop until the kiln is set to HI, then return for the last two hours."
+            ],
+            "notes": "Also here as a teaching kiln, for members thinking about buying a used kiln for home."
+        },
+        {
+            "id": "2",
+            "name": "Kiln 2",
+            "kind": "computer",
+            "blurb": "Power switch is on the wall. Shelves sag — flip them for bisque.",
+            "make": "",
+            "model": "",
+            "controller": "Bartlett V6-CF Series 700, badged Euclid Kilns",
+            "power_switch": "On the wall, not on the kiln",
+            "venting": "Exhausts together with kiln 1",
+            "max_cone": "",
+            "chamber": "",
+            "shelves": "",
+            "posts": "",
+            "thermocouples": "",
+            "quirks": [
+                "These shelves are the worst for sagging. Flip them for bisque firings to help straighten them out."
+            ],
+            "notes": ""
+        },
+        {
+            "id": "3",
+            "name": "Kiln 3",
+            "kind": "computer",
+            "blurb": "Power switch is attached to the kiln.",
+            "make": "",
+            "model": "",
+            "controller": "Bartlett V6-CF Series 700, badged Euclid Kilns",
+            "power_switch": "Attached to the kiln, on the side of the control box",
+            "venting": "Exhausts together with kiln 4",
+            "max_cone": "",
+            "chamber": "",
+            "shelves": "",
+            "posts": "",
+            "thermocouples": "",
+            "quirks": [],
+            "notes": ""
+        },
+        {
+            "id": "4",
+            "name": "Kiln 4",
+            "kind": "computer",
+            "blurb": "Power switch is attached to the kiln.",
+            "make": "",
+            "model": "",
+            "controller": "Bartlett V6-CF Series 700, badged Euclid Kilns",
+            "power_switch": "Attached to the kiln, on the side of the control box",
+            "venting": "Exhausts together with kiln 3",
+            "max_cone": "",
+            "chamber": "",
+            "shelves": "",
+            "posts": "",
+            "thermocouples": "",
+            "quirks": [],
+            "notes": ""
+        }
+    ]
+}
