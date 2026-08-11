@@ -1,10 +1,15 @@
+import os
+
 import trimesh
 import numpy as np
 from shapely.geometry import LineString
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(HERE, 'output')
+
 # --- PARAMETERS ---
-SVG_FILE = 'profile.svg'
-OUTPUT_FILE = 'mug-mold-expanded-just-floor.stl'
+SVG_FILE = os.path.join(HERE, 'svg', 'profile.svg')
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, 'mug-mold-expanded-just-floor.stl')
 
 MINIMUM_PLASTER_WIDTH = 10
 MINIMUM_PRINTED_WIDTH = 5
@@ -387,6 +392,7 @@ def build_mold():
     # wall = create_wall_piece(master, points, floor)
     # assembly = assembly.union([wall])
 
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     assembly.export(OUTPUT_FILE)
     print(f"--- SUCCESS: {OUTPUT_FILE} exported ---")
 

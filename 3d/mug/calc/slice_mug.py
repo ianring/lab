@@ -183,17 +183,15 @@ if __name__ == "__main__":
     import os
     
     # Default file or arg
-    input_file = '../shapes/profile.svg'
+    input_file = '../svg/profile.svg'
     if len(sys.argv) > 1:
         input_file = sys.argv[1]
         
     project_name = os.path.splitext(os.path.basename(input_file))[0]
     
-    # New folder structure: ../build/{project_name}/slices
-    # Assuming we are in lab/3d/calc, we go up one to 3d, then up to lab? 
-    # Or just keep it inside 3d/build?
-    # Let's put it in lab/builds/{project_name}/slices
-    base_build_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../builds'))
+    # Artifacts land in the mug project's own output/ folder, one subfolder per
+    # profile: mug/output/{project_name}/slices
+    base_build_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../output'))
     output_dir = os.path.join(base_build_dir, project_name, 'slices')
     
     print(f"Processing project: {project_name}")

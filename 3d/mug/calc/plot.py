@@ -42,4 +42,4 @@ def analyze_mug_contour(svg_file):
     print("Analysis saved to mug_analysis.png")
 
 # To use this, just save your SVG as 'mug.svg' in the same folder
-analyze_mug_contour('../shapes/profile.svg')
+analyze_mug_contour('../svg/profile.svg')

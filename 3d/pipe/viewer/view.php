@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>3D Printing Lab Viewer</title>
+    <title>Coffin Pipe STL Viewer</title>
 </head>
-<frameset cols="250,*">
+<frameset cols="280,*">
     <frame src="list.php" name="listframe">
     <frame src="viewer.php" name="viewframe">
     <noframes>
