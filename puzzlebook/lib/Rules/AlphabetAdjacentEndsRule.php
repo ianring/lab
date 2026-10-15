@@ -13,4 +13,9 @@ final class AlphabetAdjacentEndsRule extends SpellingRule
     {
         return WordTags::hasAlphabetAdjacentEnds($word);
     }
+
+    public function describe(): string
+    {
+        return 'words whose first and last letters are alphabet neighbours (A__B)';
+    }
 }

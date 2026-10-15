@@ -15,9 +15,13 @@ declare(strict_types=1);
 
 return [
 
+    // Full size: 100 pages x 20 rows x 6 columns = 12,000 words.
+    // The 9 x 15 x 6 prototype (810 words) is the quick setting to fall back to
+    // while testing a change -- a build at full size takes much longer, so prove
+    // a new rule works small before scaling it up.
     'grid' => [
-        'pages' => 9,
-        'rows' => 15,
+        'pages' => 100,
+        'rows' => 20,
         'cols' => 6,
     ],
 

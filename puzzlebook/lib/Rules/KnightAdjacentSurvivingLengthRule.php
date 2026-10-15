@@ -156,4 +156,9 @@ final class KnightAdjacentSurvivingLengthRule implements RuleInterface, Construc
         // choose its cells before anything else takes them.
         return 10;
     }
+
+    public function describe(): string
+    {
+        return "words a knight's move from a STILL-SURVIVING {$this->length}-letter word";
+    }
 }

@@ -27,7 +27,14 @@ require __DIR__ . '/Rules/SpellingRule.php';
 
 require __DIR__ . '/Rules/PalindromeRule.php';
 require __DIR__ . '/Rules/ConsonantRunRule.php';
+require __DIR__ . '/Rules/VowelRunRule.php';
 require __DIR__ . '/Rules/AlphabetAdjacentEndsRule.php';
+require __DIR__ . '/Rules/AlphabeticalOrderRule.php';
+require __DIR__ . '/Rules/BothEndsInSetRule.php';
+require __DIR__ . '/Rules/ContainsSubstringRule.php';
+require __DIR__ . '/Rules/LetterCountRule.php';
+require __DIR__ . '/Rules/ConditionalCellRule.php';
+require __DIR__ . '/Rules/SameCellNextPageRule.php';
 require __DIR__ . '/Rules/LengthAndEndingRule.php';
 require __DIR__ . '/Rules/LetterAtPositionRule.php';
 require __DIR__ . '/Rules/RestrictedAlphabetLengthRule.php';

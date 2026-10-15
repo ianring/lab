@@ -13,4 +13,9 @@ final class PalindromeRule extends SpellingRule
     {
         return WordTags::isPalindrome($word);
     }
+
+    public function describe(): string
+    {
+        return 'words that read the same backwards';
+    }
 }

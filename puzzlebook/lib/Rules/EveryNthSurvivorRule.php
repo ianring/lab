@@ -33,4 +33,9 @@ final class EveryNthSurvivorRule implements RuleInterface
         }
         return $keep;
     }
+
+    public function describe(): string
+    {
+        return "every {$this->n}th surviving word";
+    }
 }

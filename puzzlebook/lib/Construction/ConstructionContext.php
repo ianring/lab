@@ -26,6 +26,10 @@ final class ConstructionContext
     private int $targetSurvivors;
     private int $seed;
 
+    /** @var array<int, SpellingRule> step id => rule, for spelling rules running before this step */
+    private array $earlierSpellingSteps;
+
+    /** @param array<int, SpellingRule> $earlierSpellingSteps */
     public function __construct(
         int $stepId,
         int $budget,
@@ -34,8 +38,10 @@ final class ConstructionContext
         ?int $finalStepId,
         ?SpellingRule $finalRule,
         int $targetSurvivors,
-        int $seed
+        int $seed,
+        array $earlierSpellingSteps = []
     ) {
+        $this->earlierSpellingSteps = $earlierSpellingSteps;
         $this->stepId = $stepId;
         $this->budget = $budget;
         $this->spellingRulesBefore = $spellingRulesBefore;
@@ -92,5 +98,21 @@ final class ConstructionContext
     public function seed(): int
     {
         return $this->seed;
+    }
+
+    /**
+     * The spelling rules that run before this step, keyed by step id, in chain order.
+     *
+     * For a rule that needs a PRECONDITION -- "only fires where some other cell has
+     * already been crossed out" -- this is how it arranges one: claim that cell and
+     * shape its word to fail one of these earlier rules, so it is reliably gone by
+     * the time this step runs. Without it, a rule would have to hope another rule
+     * happened to kill the right cell at the right time.
+     *
+     * @return array<int, SpellingRule>
+     */
+    public function earlierSpellingSteps(): array
+    {
+        return $this->earlierSpellingSteps;
     }
 }

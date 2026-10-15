@@ -41,6 +41,24 @@ final class WordTags
         return false;
     }
 
+    /** True if $word contains $runLength or more consecutive vowels (Y never counts). */
+    public static function hasVowelRun(string $word, int $runLength): bool
+    {
+        $run = 0;
+        $len = strlen($word);
+        for ($i = 0; $i < $len; $i++) {
+            if (!self::isVowel($word[$i])) {
+                $run = 0;
+                continue;
+            }
+            $run++;
+            if ($run >= $runLength) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** 1-indexed letter lookup; null if $word is shorter than $position. */
     public static function letterAt(string $word, int $position): ?string
     {
@@ -68,6 +86,35 @@ final class WordTags
             return false;
         }
         return (ord(self::lastLetter($word)) - ord(self::firstLetter($word))) === 1;
+    }
+
+    /** True if $word contains $needle anywhere in it ("ee", "z", "tion", ...). */
+    public static function contains(string $word, string $needle): bool
+    {
+        return str_contains($word, $needle);
+    }
+
+    /**
+     * True if $word's letters never go backwards through the alphabet -- "almost",
+     * "begin", "chimp". Repeated letters are allowed ("bee" counts), since they don't
+     * go backwards either.
+     */
+    public static function isInAlphabeticalOrder(string $word): bool
+    {
+        $len = strlen($word);
+        for ($i = 1; $i < $len; $i++) {
+            if ($word[$i] < $word[$i - 1]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** True if BOTH the first and last letter of $word are in $letters. */
+    public static function bothEndsIn(string $word, array $letters): bool
+    {
+        return in_array(self::firstLetter($word), $letters, true)
+            && in_array(self::lastLetter($word), $letters, true);
     }
 
     /** True if every letter in $word is one of $allowedLetters (each a single lowercase letter). */

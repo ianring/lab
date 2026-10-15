@@ -25,6 +25,17 @@ use Puzzlebook\WordTags;
  */
 final class MatchingNeighbourEndsRule implements RuleInterface, ConstructsCells
 {
+    /**
+     * Letters a deliberate pair may join on -- i.e. letters that enough English words
+     * both end with and begin with for the right half to be findable. Excludes
+     * j, k, q, u, v, x, y and z: all of them are scarce as initials, and a pair that
+     * joined on one would need a right-hand word from a pool of a few dozen.
+     */
+    private const USABLE_JOIN_LETTERS = [
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'w',
+    ];
+
+
     public function apply(array $words, Grid $grid, array $keep): array
     {
         for ($page = 0; $page < $grid->pages; $page++) {
@@ -64,12 +75,20 @@ final class MatchingNeighbourEndsRule implements RuleInterface, ConstructsCells
         for ($n = 0; $n < $pairsWanted; $n++) {
             [$left, $right] = $candidates[$n];
 
-            // The left half is unconstrained apart from surviving the earlier rules;
-            // whatever letter it ends on becomes the requirement for the right half.
+            // The left half's LAST letter becomes the right half's required FIRST
+            // letter, so it has to be a letter plenty of words begin with. Left
+            // unconstrained, a left word ending in q, x or z would demand a right word
+            // starting with it, and there are only a handful of those in the language.
+            // At prototype size that's a rare annoyance; at full size, with thousands
+            // of pairs to place, it's a guaranteed failure.
             $canvas->claimDoomed(
                 $left,
                 $context->stepId(),
-                new CellPlan($survivesBefore, static fn (): bool => true, 'pairleft')
+                new CellPlan(
+                    $survivesBefore,
+                    static fn (string $word): bool => in_array(WordTags::lastLetter($word), self::USABLE_JOIN_LETTERS, true),
+                    'pairleft'
+                )
             );
 
             // The right half is resolved at fill time, once the left half actually has
@@ -89,5 +108,10 @@ final class MatchingNeighbourEndsRule implements RuleInterface, ConstructsCells
         // Needs two specific cells side by side, so it chooses before the
         // take-anything spelling rules but after whatever defines the survivors.
         return 50;
+    }
+
+    public function describe(): string
+    {
+        return "side-by-side pairs where the left word ends on the right word's first letter";
     }
 }

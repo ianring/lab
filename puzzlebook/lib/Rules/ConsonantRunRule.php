@@ -17,4 +17,9 @@ final class ConsonantRunRule extends SpellingRule
     {
         return WordTags::hasConsonantRun($word, $this->length);
     }
+
+    public function describe(): string
+    {
+        return "words with {$this->length}+ consonants in a row";
+    }
 }

@@ -35,6 +35,7 @@ declare(strict_types=1);
 require __DIR__ . '/../lib/bootstrap.php';
 
 use Puzzlebook\ChainPlan;
+use Puzzlebook\Engine;
 use Puzzlebook\Grid;
 use Puzzlebook\Rules\ConstructsCells;
 use Puzzlebook\Rules\SpellingRule;
@@ -71,11 +72,26 @@ $answer = $chain['answer'];
 echo 'Chain: ' . count($chain['steps']) . " steps -- {$spellingCount} spelling rules, "
     . count($plan->constructorsByPriority()) . " rules that build their own cells, 1 reveal, 1 final rule.\n";
 
+// What the chain actually DOES, in reading order, so a dozen-plus rules stay legible
+// without cross-referencing config/chain.php. Each rule describes itself.
+echo "\nThe chain, in the order a reader works through it:\n";
+foreach ($chain['steps'] as $step) {
+    $id = str_pad((string) $step['id'], 2);
+    if (($step['kind'] ?? '') === 'reveal') {
+        echo "  {$id} REVEAL  " . Engine::describeReveal($step['reveal']) . "\n";
+        echo "            -> \"" . $step['expected'] . "\"\n";
+        continue;
+    }
+    $rule = Engine::ruleFromConfig($step['rule']);
+    $marker = !empty($step['final']) ? 'FINAL ' : (empty($step['printed']) ? 'HIDDEN' : '      ');
+    echo "  {$id} {$marker}  crosses out " . $rule->describe() . "\n";
+}
+
 echo "\nConstruction order (which rule gets to choose its cells first):\n";
 foreach ($plan->constructorsByPriority() as [$stepId, $rule, $priority]) {
     $kind = $rule instanceof SpellingRule ? 'spelling, takes any cell' : 'positional, needs specific cells';
-    $short = (new ReflectionClass($rule))->getShortName();
-    echo "  priority {$priority}: step {$stepId} ({$short}) -- {$kind}\n";
+    echo "  priority " . str_pad((string) $priority, 3) . " step " . str_pad((string) $stepId, 2)
+        . " -- {$kind}\n";
 }
 echo "\n";
 
@@ -86,7 +102,7 @@ foreach (array_merge([$answer], $revealWords) as $word) {
     $killedBy = [];
     foreach ($spellingRules as $index => $rule) {
         if ($rule->failsWord($word)) {
-            $killedBy[] = '#' . ($index + 1) . ' (' . (new ReflectionClass($rule))->getShortName() . ')';
+            $killedBy[] = '#' . ($index + 1) . ' (' . $rule->describe() . ')';
         }
     }
     if ($killedBy === []) {
@@ -103,6 +119,25 @@ try {
     $plan->validateReservedWords($answer);
 } catch (Throwable $e) {
     $problems[] = $e->getMessage();
+}
+
+// A reserved word doesn't have to be in the word list -- it's placed directly at its
+// cell rather than looked up -- but it's worth knowing when one isn't, because it will
+// then be the only word in the book that didn't come from the pool. Usually that's
+// invisible; it's only awkward if the word also stands out in some other way (being
+// longer than anything else, say).
+$pool = file($wordlistPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+$poolIndex = array_fill_keys($pool, true);
+$notInPool = [];
+foreach (array_merge([$answer], $revealWords) as $word) {
+    if (!isset($poolIndex[$word])) {
+        $notInPool[] = $word;
+    }
+}
+if ($notInPool !== []) {
+    echo "\n  note: " . implode(', ', $notInPool) . ' not in the word list. '
+        . (count($notInPool) === 1 ? 'It' : 'They') . " will still be placed, but won't\n"
+        . "        appear anywhere else in the book. Fine unless they look conspicuous.\n";
 }
 echo "\n";
 
@@ -182,9 +217,8 @@ for ($j = 0; $j < $spellingCount; $j++) {
     $died = count($running) - count($next);
     $running = $next;
     $poolAfter[$j] = count($running);
-    $short = (new ReflectionClass($spellingRules[$j]))->getShortName();
-    echo "  after rule #" . ($j + 1) . " ({$short}): " . count($running)
-        . " words survive (that rule can remove at most {$died})\n";
+    echo "  after rule #" . ($j + 1) . ': ' . count($running)
+        . " words survive (it can remove at most {$died}) -- " . $spellingRules[$j]->describe() . "\n";
 }
 $survivesEverything = count($running);
 echo "\n";
@@ -200,31 +234,53 @@ foreach ($plan->constructorsByPriority() as [$stepId, $rule]) {
     }
 }
 
+// Track the notional remainder the keep_fractions act on, so a step that's short can
+// be told the keep_fraction that WOULD fit -- at full book size these can't be
+// eyeballed, and guessing them one build at a time is exactly the slow loop this
+// script exists to replace.
+$notionalRemaining = $size;
 $ruleIndex = 0;
+
 foreach ($chain['steps'] as $step) {
     if (($step['kind'] ?? '') !== 'eliminate' || !empty($step['final'])) {
         continue;
     }
     $stepId = $step['id'];
-    if (!isset($spellingStepIds[$stepId])) {
-        continue;
-    }
-    $rule = $spellingStepIds[$stepId];
     $needed = $budgets[$stepId] ?? 0;
 
+    if (!isset($spellingStepIds[$stepId])) {
+        // Positional rules have no word-shape supply limit worth reporting.
+        $notionalRemaining -= $needed;
+        continue;
+    }
+
+    $rule = $spellingStepIds[$stepId];
     $availableForStep = 0;
     foreach ($eligible as $w) {
         if ($survivesThrough($w, $ruleIndex) && $rule->failsWord($w)) {
             $availableForStep++;
         }
     }
+
     $verdict = $availableForStep >= $needed ? 'ok     ' : 'BLOCKED';
-    echo "  {$verdict} step {$stepId}: needs {$needed} words that fail it, has {$availableForStep}\n";
+    echo "  {$verdict} step " . str_pad((string) $stepId, 2) . " needs {$needed}, has {$availableForStep}"
+        . "   ({$rule->describe()})\n";
+
     if ($availableForStep < $needed) {
+        // Budget is round(remaining * (1 - keep_fraction)), so the fraction that asks
+        // for exactly what exists is 1 - available/remaining. Back off a little so
+        // rounding can't push it over again.
+        $suggestion = $notionalRemaining > 0
+            ? 1 - (($availableForStep * 0.95) / $notionalRemaining)
+            : 1.0;
+        $suggestion = min(0.9999, max(0.0, $suggestion));
         $problems[] = "Step {$stepId} needs {$needed} words that pass every earlier rule and fail it, but the "
-            . "list only has {$availableForStep}. Raise that step's keep_fraction so it removes fewer, or "
-            . 'move it earlier in the chain where more words are still eligible.';
+            . "list only has {$availableForStep}. Set its keep_fraction to about "
+            . number_format($suggestion, 4) . " (it's " . $step['construction']['keep_fraction'] . ' now), '
+            . 'or move it earlier in the chain where more words are still eligible.';
     }
+
+    $notionalRemaining -= $needed;
     $ruleIndex++;
 }
 

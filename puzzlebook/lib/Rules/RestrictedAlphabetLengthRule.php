@@ -23,4 +23,10 @@ final class RestrictedAlphabetLengthRule extends SpellingRule
     {
         return strlen($word) === $this->length && WordTags::usesOnlyLetters($word, $this->allowedLetters);
     }
+
+    public function describe(): string
+    {
+        return "{$this->length}-letter words spelled only from "
+            . strtoupper(implode('', $this->allowedLetters));
+    }
 }

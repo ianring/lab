@@ -35,6 +35,12 @@ final class ChainPlan
     /** @var array<int,int> step id => how many spelling rules run before it */
     private array $spellingRulesBefore = [];
 
+    /** @var array<int, array<int, SpellingRule>> step id => the spelling steps before it */
+    private array $earlierSpellingSteps = [];
+
+    /** @var array<int, SpellingRule> step id => rule, for spelling steps, in chain order */
+    private array $spellingStepsById = [];
+
     /** @var array<int,float> step id => keep_fraction, for steps that declared one */
     private array $keepFractions = [];
 
@@ -101,6 +107,7 @@ final class ChainPlan
             // that ordinary words have to survive, and it never claims cells.
             if (!$isFinal) {
                 $this->spellingRulesBefore[$step['id']] = count($this->spellingRules);
+                $this->earlierSpellingSteps[$step['id']] = $this->spellingStepsById;
 
                 $construction = $step['construction'] ?? null;
                 if ($construction === null) {
@@ -136,6 +143,7 @@ final class ChainPlan
                 // A spelling rule contributes to the prefix every later word must pass.
                 if ($rule instanceof SpellingRule) {
                     $this->spellingRules[] = $rule;
+                    $this->spellingStepsById[$step['id']] = $rule;
                 }
             }
         }
@@ -206,7 +214,8 @@ final class ChainPlan
             $this->finalStep['id'],
             $this->finalRule,
             $targetSurvivors,
-            $seedBase + $stepId * 101
+            $seedBase + $stepId * 101,
+            $this->earlierSpellingSteps[$stepId] ?? []
         );
     }
 

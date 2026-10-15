@@ -10,7 +10,12 @@ use Puzzlebook\Reveals\EveryNthWordReveal;
 use Puzzlebook\Reveals\LastSurvivorOnPageReveal;
 use Puzzlebook\Reveals\RevealInterface;
 use Puzzlebook\Rules\AlphabetAdjacentEndsRule;
+use Puzzlebook\Rules\AlphabeticalOrderRule;
+use Puzzlebook\Rules\BothEndsInSetRule;
 use Puzzlebook\Rules\ConsonantRunRule;
+use Puzzlebook\Rules\ConditionalCellRule;
+use Puzzlebook\Rules\ContainsSubstringRule;
+use Puzzlebook\Rules\LetterCountRule;
 use Puzzlebook\Rules\EveryNthSurvivorRule;
 use Puzzlebook\Rules\KnightAdjacentInitialRule;
 use Puzzlebook\Rules\KnightAdjacentSurvivingLengthRule;
@@ -20,6 +25,8 @@ use Puzzlebook\Rules\MatchingNeighbourEndsRule;
 use Puzzlebook\Rules\PalindromeRule;
 use Puzzlebook\Rules\RestrictedAlphabetLengthRule;
 use Puzzlebook\Rules\RuleInterface;
+use Puzzlebook\Rules\SameCellNextPageRule;
+use Puzzlebook\Rules\VowelRunRule;
 
 /**
  * Turns a step's plain-array config (as written in config/chain.php) into
@@ -48,8 +55,20 @@ final class Engine
         return match ($rule['type']) {
             'palindrome' => new PalindromeRule(),
             'consonant_run' => new ConsonantRunRule($p['length']),
+            'vowel_run' => new VowelRunRule($p['length'], $p['max_length'] ?? null),
+            'letter_count' => new LetterCountRule($p['letter'], $p['count']),
+            'conditional_cell' => new ConditionalCellRule($p['trigger'] ?? [0, 0], $p['target'] ?? [0, -1]),
+            'same_cell_next_page' => new SameCellNextPageRule(
+                $p['letters'] ?? ['j'],
+                $p['position'] ?? 2,
+                $p['page_offset'] ?? 1,
+                $p['remove_trigger'] ?? true
+            ),
             'alphabet_adjacent_ends' => new AlphabetAdjacentEndsRule(),
-            'letter_at_position' => new LetterAtPositionRule($p['position'], $p['matches']),
+            'alphabetical_order' => new AlphabeticalOrderRule($p['min_length'] ?? null),
+            'both_ends_in_set' => new BothEndsInSetRule($p['letters'], $p['max_length'] ?? null),
+            'contains_substring' => new ContainsSubstringRule($p['needle']),
+            'letter_at_position' => new LetterAtPositionRule($p['position'], $p['matches'], $p['length'] ?? null),
             'length_and_ending' => new LengthAndEndingRule($p['length'], $p['ending']),
             'every_nth_survivor' => new EveryNthSurvivorRule($p['n']),
             'knight_adjacent' => new KnightAdjacentInitialRule($p['initials']),

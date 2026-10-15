@@ -194,9 +194,15 @@ config/layout.php     The grid's shape (pages/rows/cols) and the one letter
                       word by exact cell position; ChainBuilder does that
                       itself now.
 
-data/wordlist.txt      The raw word pool (~105,000 English dictionary
-                      words, 3-9 letters, filtered from /usr/share/dict/
-                      words) that every word in the book is drawn from.
+data/wordlist.txt      The raw word pool every word in the book is drawn
+                      from: ~133,000 words of 3-10 letters, lowercase a-z
+                      only, filtered from /usr/share/dict/words. Built by
+                      bin/make-wordlist.php -- don't hand-edit it.
+
+bin/make-wordlist.php   Regenerates the word list from a system dictionary,
+                      with --min and --max length. The length range is a
+                      real design knob, not a chore: it decides how much
+                      supply each rule has. Re-run bin/check.php after.
 
 lib/WordTags.php       Pure spelling checks: palindrome, consonant run,
                       letter at a position, first/last letter, alphabet-

@@ -24,4 +24,9 @@ final class LengthAndEndingRule extends SpellingRule
     {
         return strlen($word) === $this->length && WordTags::lastLetter($word) === $this->ending;
     }
+
+    public function describe(): string
+    {
+        return "{$this->length}-letter words ending in " . strtoupper($this->ending);
+    }
 }

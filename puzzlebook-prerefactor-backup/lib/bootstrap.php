@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/WordTags.php';
+require __DIR__ . '/Rng.php';
+require __DIR__ . '/Grid.php';
+require __DIR__ . '/ConstructionRetry.php';
+
+require __DIR__ . '/Rules/RuleInterface.php';
+require __DIR__ . '/Rules/SpellingRule.php';
+require __DIR__ . '/Rules/PalindromeRule.php';
+require __DIR__ . '/Rules/ConsonantRunRule.php';
+require __DIR__ . '/Rules/AlphabetAdjacentEndsRule.php';
+require __DIR__ . '/Rules/LengthAndEndingRule.php';
+require __DIR__ . '/Rules/LetterAtPositionRule.php';
+require __DIR__ . '/Rules/EveryNthSurvivorRule.php';
+require __DIR__ . '/Rules/KnightAdjacentInitialRule.php';
+require __DIR__ . '/Rules/KnightAdjacentSurvivingLengthRule.php';
+require __DIR__ . '/Rules/MatchingNeighbourEndsRule.php';
+require __DIR__ . '/Rules/RestrictedAlphabetLengthRule.php';
+
+require __DIR__ . '/Reveals/RevealInterface.php';
+require __DIR__ . '/Reveals/EveryNthWordReveal.php';
+require __DIR__ . '/Reveals/AcrosticFirstCellPerPageReveal.php';
+require __DIR__ . '/Reveals/LastSurvivorOnPageReveal.php';
+require __DIR__ . '/Reveals/ColumnLastLettersReveal.php';
+
+require __DIR__ . '/Engine.php';
+require __DIR__ . '/Dictionary.php';
+require __DIR__ . '/ChainBuilder.php';
+require __DIR__ . '/Solver.php';

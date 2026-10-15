@@ -39,4 +39,10 @@ final class KnightAdjacentInitialRule implements RuleInterface
         }
         return $keep;
     }
+
+    public function describe(): string
+    {
+        return "words a knight's move from a word starting with "
+            . strtoupper(implode('/', $this->initials));
+    }
 }
