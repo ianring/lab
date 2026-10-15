@@ -1,0 +1,12 @@
+{
+    "name": "ianring/twelve-tone-sudoku",
+    "description": "12x12 sudoku engraved as chromatic tone rows, composed onto PDF pages",
+    "require": {
+        "php": ">=7.4",
+        "tecnickcom/tcpdf": "^6.6",
+        "setasign/fpdi": "^2.6"
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
