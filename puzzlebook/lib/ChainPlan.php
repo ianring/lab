@@ -178,6 +178,19 @@ final class ChainPlan
         return $this->constructors;
     }
 
+    /**
+     * True if this step's reach is set by a keep_fraction, false if it's derived from
+     * the rule's own geometry.
+     *
+     * The builder needs this because a derived rule takes cells without a budget, so
+     * every such rule has to claim BEFORE the budgets for the others are worked out --
+     * otherwise the arithmetic promises cells that a derived rule then takes.
+     */
+    public function hasBudget(int $stepId): bool
+    {
+        return isset($this->keepFractions[$stepId]);
+    }
+
     /** @return string[] */
     public function revealWords(): array
     {

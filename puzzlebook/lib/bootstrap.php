@@ -16,6 +16,8 @@ require __DIR__ . '/ConstructionRetry.php';
 
 // The construction hand-off: what rules write their layout decisions into.
 require __DIR__ . '/Construction/CellPlan.php';
+require __DIR__ . '/Construction/FillInvariant.php';
+require __DIR__ . '/Construction/UniquePageSignature.php';
 require __DIR__ . '/Construction/Canvas.php';
 require __DIR__ . '/Construction/ConstructionContext.php';
 
@@ -38,6 +40,13 @@ require __DIR__ . '/Rules/SameCellNextPageRule.php';
 require __DIR__ . '/Rules/LengthAndEndingRule.php';
 require __DIR__ . '/Rules/LetterAtPositionRule.php';
 require __DIR__ . '/Rules/RestrictedAlphabetLengthRule.php';
+require __DIR__ . '/Rules/UsesOnlyLettersRule.php';
+require __DIR__ . '/Rules/ConsonantVowelPatternRule.php';
+require __DIR__ . '/Rules/RepeatedLetterRule.php';
+require __DIR__ . '/Rules/LetterSumRule.php';
+require __DIR__ . '/Rules/ScrabbleScoreRule.php';
+require __DIR__ . '/Rules/VowelFractionRule.php';
+require __DIR__ . '/Rules/PrimePositionRule.php';
 require __DIR__ . '/Rules/EveryNthSurvivorRule.php';
 require __DIR__ . '/Rules/KnightAdjacentInitialRule.php';
 require __DIR__ . '/Rules/KnightAdjacentSurvivingLengthRule.php';

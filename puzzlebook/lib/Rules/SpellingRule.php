@@ -61,18 +61,18 @@ abstract class SpellingRule implements RuleInterface, ConstructsCells
             );
         }
 
-        $failsThisRule = fn (string $word): bool => $this->failsWord($word);
+        // ONE plan, shared by every cell this rule claims. They all want exactly the
+        // same thing, and a plan is immutable, so building one per cell would cost an
+        // object and a closure each time -- thousands of them at full book size, which
+        // is enough to exhaust PHP's default memory limit on its own.
+        $plan = new CellPlan(
+            $context->spellingRulesBefore(),
+            fn (string $word): bool => $this->failsWord($word),
+            'stage' . $context->stepId()
+        );
 
         for ($n = 0; $n < $budget; $n++) {
-            $canvas->claimDoomed(
-                $free[$n],
-                $context->stepId(),
-                new CellPlan(
-                    $context->spellingRulesBefore(),
-                    static fn (string $word): bool => $failsThisRule($word),
-                    'stage' . $context->stepId()
-                )
-            );
+            $canvas->claimDoomed($free[$n], $context->stepId(), $plan);
         }
     }
 

@@ -8,14 +8,22 @@ use Puzzlebook\Grid;
 use Puzzlebook\WordTags;
 
 /**
+ * UNUSED, and it breaks the book's reading rule as written -- see below.
+ *
  * Cross out every surviving word that is a knight's move (as in chess)
  * from a word on the same page whose first letter is one of $initials.
  *
- * Crossed-out words still count as neighbours here: this reads what is
- * printed in a cell, not whether a highlighter has passed over it. (This
- * convention is stated in the book's front matter.) Positional, so there's
- * no build()-side failsWord() -- lib/ChainBuilder.php places a dedicated
- * anchor word near each survivor instead of picking words in isolation.
+ * This reads the neighbour's first letter whether or not the neighbour has
+ * been crossed out, which the book no longer permits: a reader using a
+ * marker can't read an eliminated word at all, so the rule would be
+ * unsolvable for them (see convention 3 in config/chain.php). It was written
+ * before that constraint was understood, and its whole construction scheme
+ * depended on anchors that die early and are read anyway.
+ *
+ * To revive it, require the anchor to be still standing -- which also means
+ * reworking construction, since anchors could then no longer be ordinary
+ * filler that dies on schedule. KnightAdjacentSurvivingLengthRule is the
+ * version that gets this right, and is what the finale uses.
  */
 final class KnightAdjacentInitialRule implements RuleInterface
 {

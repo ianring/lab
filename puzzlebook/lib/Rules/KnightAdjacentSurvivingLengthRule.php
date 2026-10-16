@@ -84,6 +84,10 @@ final class KnightAdjacentSurvivingLengthRule implements RuleInterface, Construc
         // the launch-pad shape, so the only words the final step removes are the keys.
         $victimShape = static fn (string $word): bool => !$finalRule->failsWord($word);
 
+        // One plan each, shared across every cell of that kind -- see CellPlan.
+        $keyPlan = new CellPlan($survivesAll, $keyShape, 'key');
+        $victimPlan = new CellPlan($survivesAll, $victimShape, 'victim');
+
         $target = $context->targetSurvivors();
         $placedAny = false;
 
@@ -120,19 +124,9 @@ final class KnightAdjacentSurvivingLengthRule implements RuleInterface, Construc
 
             // The key is NOT replaceable: this rule fires from it, so its shape is
             // load-bearing. Its victims are, so the reveal can use them.
-            $canvas->claimSurvivor(
-                $candidate,
-                $finalStepId,
-                new CellPlan($survivesAll, $keyShape, 'key'),
-                false
-            );
+            $canvas->claimSurvivor($candidate, $finalStepId, $keyPlan, false);
             foreach ($usable as $n) {
-                $canvas->claimSurvivor(
-                    $n,
-                    $context->stepId(),
-                    new CellPlan($survivesAll, $victimShape, 'victim'),
-                    true
-                );
+                $canvas->claimSurvivor($n, $context->stepId(), $victimPlan, true);
             }
             $placedAny = true;
         }

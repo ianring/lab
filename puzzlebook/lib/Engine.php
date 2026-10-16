@@ -14,7 +14,10 @@ use Puzzlebook\Rules\AlphabeticalOrderRule;
 use Puzzlebook\Rules\BothEndsInSetRule;
 use Puzzlebook\Rules\ConsonantRunRule;
 use Puzzlebook\Rules\ConditionalCellRule;
+use Puzzlebook\Rules\ConsonantVowelPatternRule;
 use Puzzlebook\Rules\ContainsSubstringRule;
+use Puzzlebook\Rules\LetterSumRule;
+use Puzzlebook\Rules\RepeatedLetterRule;
 use Puzzlebook\Rules\LetterCountRule;
 use Puzzlebook\Rules\EveryNthSurvivorRule;
 use Puzzlebook\Rules\KnightAdjacentInitialRule;
@@ -23,6 +26,10 @@ use Puzzlebook\Rules\LengthAndEndingRule;
 use Puzzlebook\Rules\LetterAtPositionRule;
 use Puzzlebook\Rules\MatchingNeighbourEndsRule;
 use Puzzlebook\Rules\PalindromeRule;
+use Puzzlebook\Rules\PrimePositionRule;
+use Puzzlebook\Rules\ScrabbleScoreRule;
+use Puzzlebook\Rules\UsesOnlyLettersRule;
+use Puzzlebook\Rules\VowelFractionRule;
 use Puzzlebook\Rules\RestrictedAlphabetLengthRule;
 use Puzzlebook\Rules\RuleInterface;
 use Puzzlebook\Rules\SameCellNextPageRule;
@@ -57,6 +64,13 @@ final class Engine
             'consonant_run' => new ConsonantRunRule($p['length']),
             'vowel_run' => new VowelRunRule($p['length'], $p['max_length'] ?? null),
             'letter_count' => new LetterCountRule($p['letter'], $p['count']),
+            'consonant_vowel_pattern' => new ConsonantVowelPatternRule($p['pattern']),
+            'repeated_letter' => new RepeatedLetterRule($p['times'], $p['group'] ?? 'consonant'),
+            'letter_sum' => new LetterSumRule($p['test'] ?? 'prime', $p['n'] ?? 0),
+            'uses_only_letters' => new UsesOnlyLettersRule($p['letters'], $p['length'] ?? null),
+            'scrabble_score' => new ScrabbleScoreRule($p['multiple_of'], $p['remainder'] ?? 0),
+            'vowel_fraction' => new VowelFractionRule($p['numerator'], $p['denominator']),
+            'prime_position' => new PrimePositionRule(),
             'conditional_cell' => new ConditionalCellRule($p['trigger'] ?? [0, 0], $p['target'] ?? [0, -1]),
             'same_cell_next_page' => new SameCellNextPageRule(
                 $p['letters'] ?? ['j'],

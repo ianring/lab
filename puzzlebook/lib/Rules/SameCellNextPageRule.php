@@ -30,10 +30,9 @@ use Puzzlebook\WordTags;
  * so $letters and $position are the knobs to turn if the footprint isn't
  * what you wanted.
  *
- * The trigger is read from what's PRINTED, not from what is still standing,
- * so a trigger already crossed out still fires (convention 3 in the book's
- * front matter). That also makes the rule independent of the order pages are
- * worked through.
+ * The trigger must still be STANDING to fire. The reader has to read its
+ * second letter, and a word crossed out with a marker can't be read at all --
+ * no rule in this book asks anyone to read an eliminated word.
  *
  * WHY $removeTrigger DEFAULTS TO TRUE. Every word in the book has to be
  * crossed out by some rule, or it survives to the end and breaks the finale.
@@ -57,10 +56,13 @@ final class SameCellNextPageRule implements RuleInterface, ConstructsCells
 
     public function apply(array $words, Grid $grid, array $keep): array
     {
-        $cellsPerPage = $grid->rows * $grid->cols;
+        // Only a word still standing can trigger this: the reader has to be able to
+        // READ its second letter, and a crossed-out word may be under a marker. Read
+        // from a snapshot so removing a trigger can't stop a later one from firing.
+        $keepBefore = $keep;
 
         foreach ($words as $i => $word) {
-            if (!$this->isTrigger($word)) {
+            if (!$keepBefore[$i] || !$this->isTrigger($word)) {
                 continue;
             }
 
@@ -141,6 +143,10 @@ final class SameCellNextPageRule implements RuleInterface, ConstructsCells
         }
         $hostable = Rng::shuffle($hostable, $context->seed());
 
+        // One plan of each kind for the whole rule -- see CellPlan.
+        $triggerPlan = new CellPlan($prefix, $triggerShape, 'trigger' . $context->stepId());
+        $targetPlan = CellPlan::surviving($prefix, 'nextpage' . $context->stepId());
+
         $placed = 0;
         foreach ($hostable as [$triggerCell, $targetCell]) {
             if ($placed >= $wanted) {
@@ -150,17 +156,8 @@ final class SameCellNextPageRule implements RuleInterface, ConstructsCells
                 continue;
             }
 
-            $canvas->claimDoomed(
-                $triggerCell,
-                $context->stepId(),
-                new CellPlan($prefix, $triggerShape, 'trigger' . $context->stepId())
-            );
-
-            $canvas->claimDoomed(
-                $targetCell,
-                $context->stepId(),
-                CellPlan::surviving($prefix, 'nextpage' . $context->stepId())
-            );
+            $canvas->claimDoomed($triggerCell, $context->stepId(), $triggerPlan);
+            $canvas->claimDoomed($targetCell, $context->stepId(), $targetPlan);
 
             $placed++;
         }

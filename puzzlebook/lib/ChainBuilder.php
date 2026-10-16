@@ -107,6 +107,27 @@ final class ChainBuilder
         array $layout,
         string $wordlistPath
     ): array {
+        $canvas = self::layOutCells($attempt, $grid, $plan, $chain);
+
+        return self::fillWords(
+            $canvas,
+            new Dictionary($wordlistPath, $layout['filler_excluded_initial'] ?? ''),
+            $plan,
+            array_merge([$chain['answer']], $plan->revealWords())
+        );
+    }
+
+    /**
+     * Works out which rule eliminates which cell, and what shape each cell's word has
+     * to be -- the whole layout, with no words chosen yet.
+     *
+     * Split out from attempt() so bin/check.php can run it and then inspect the
+     * resulting CellPlans to see what each rule is really asking the dictionary for.
+     * That keeps the check honest: it reads the demands the rules actually declare
+     * rather than a second, hand-maintained list of what we think they need.
+     */
+    public static function layOutCells(int $attempt, Grid $grid, ChainPlan $plan, array $chain): Canvas
+    {
         $canvas = new Canvas($grid);
         $size = $grid->size();
         $answer = $chain['answer'];
@@ -129,22 +150,32 @@ final class ChainBuilder
 
         // --- 2. Let the rules claim their cells, fussiest first. ---
 
+        // Two passes, split by whether a rule HAS a budget rather than by priority.
+        //
+        // A rule whose reach is 'derived' takes however many cells its own geometry
+        // dictates, with no budget to cap it. So every derived rule has to claim before
+        // the budgets for the others are worked out -- otherwise the arithmetic shares
+        // out cells that a derived rule then takes, and whichever rule happens to run
+        // last comes up short by exactly that much. (That was a real bug: the corner
+        // rule quietly took ~200 cells the budgets had already promised elsewhere.)
+        //
+        // Priority still orders the rules WITHIN each pass.
         $constructors = $plan->constructorsByPriority();
-        $deferred = [];
+        $budgeted = [];
 
-        foreach ($constructors as [$stepId, $rule, $priority]) {
-            if ($priority >= 20) {
-                $deferred[] = [$stepId, $rule, $priority];
+        foreach ($constructors as [$stepId, $rule]) {
+            if ($plan->hasBudget($stepId)) {
+                $budgeted[] = [$stepId, $rule];
                 continue;
             }
             $rule->construct($canvas, $plan->contextFor($stepId, 0, $targetSurvivors, self::STEP_SEED + $attempt));
         }
 
-        // Budgets can only be worked out now: how many cells are left to share depends
-        // on how many the survivor-defining rules kept alive.
+        // Now the budgets can be exact: this is the number of cells genuinely left to
+        // share, after everything that sizes itself has taken its share.
         $budgets = $plan->budgetsFor(count($canvas->freeCells()), $size);
 
-        foreach ($deferred as [$stepId, $rule, $priority]) {
+        foreach ($budgeted as [$stepId, $rule]) {
             $rule->construct(
                 $canvas,
                 $plan->contextFor($stepId, $budgets[$stepId] ?? 0, $targetSurvivors, self::STEP_SEED + $attempt)
@@ -199,14 +230,7 @@ final class ChainBuilder
             $canvas->rewritePlan($cell, CellPlan::literal($word, $plan->spellingRuleCount(), 'reveal'));
         }
 
-        // --- 4. Fill in real words. ---
-
-        return self::fillWords(
-            $canvas,
-            new Dictionary($wordlistPath, $layout['filler_excluded_initial'] ?? ''),
-            $plan,
-            array_merge([$answer], $revealWords)
-        );
+        return $canvas;
     }
 
     // ------------------------------------------------------------------ word filling
@@ -230,6 +254,7 @@ final class ChainBuilder
         $size = $canvas->size();
         $words = array_fill(0, $size, null);
         $spellingRules = $plan->spellingRules();
+        $invariants = $canvas->invariants();
 
         // Claim the words that are needed at specific cells before any filler is
         // handed out -- they pass every rule, so they'd otherwise be valid filler
@@ -251,7 +276,6 @@ final class ChainBuilder
             if ($col > 0 && $words[$i - 1] !== null && !$cellPlan->allowsLeftMatch()) {
                 $leftLast = WordTags::lastLetter($words[$i - 1]);
             }
-
             // And it must not end on the letter the cell to its right is pinned to --
             // unless that cell wants the match, in which case it's deliberate.
             $rightFirst = null;
@@ -276,18 +300,38 @@ final class ChainBuilder
                         "'{$literal}' has to sit at a specific cell, but would pair with its right neighbour there"
                     );
                 }
+                // Predetermined words skip the dictionary, so they'd skip the invariant
+                // checks with it -- but a revealed word can collide with a page-wide
+                // condition just as easily as any other.
+                foreach ($invariants as $invariant) {
+                    if (!$invariant->allows($literal, $i, $words, $grid)) {
+                        throw new ConstructionRetry(
+                            "'{$literal}' has to sit at a specific cell, but breaks "
+                            . $invariant->describe() . ' there'
+                        );
+                    }
+                }
                 $words[$i] = $literal;
+                foreach ($invariants as $invariant) {
+                    $invariant->record($literal, $i, $grid);
+                }
                 continue;
             }
 
+            // $words is captured BY REFERENCE deliberately. By value, PHP would have to
+            // separate and copy the whole array every time the next cell is filled --
+            // once per cell, so quadratic in book size. The closure only reads it.
             $prefix = $cellPlan->survivesPrefix();
             $predicate = static function (string $candidate) use (
                 $cellPlan,
-                $words,
+                &$words,
                 $spellingRules,
                 $prefix,
                 $leftLast,
-                $rightFirst
+                $rightFirst,
+                $i,
+                $invariants,
+                $grid
             ): bool {
                 if ($leftLast !== null && $candidate[0] === $leftLast) {
                     return false;
@@ -300,15 +344,29 @@ final class ChainBuilder
                         return false;
                     }
                 }
-                return $cellPlan->shapeAllows($candidate, $words);
+                if (!$cellPlan->shapeAllows($candidate, $words, $i)) {
+                    return false;
+                }
+                // Checked last: these are the costliest tests, and the cheap ones above
+                // will already have rejected most candidates.
+                foreach ($invariants as $invariant) {
+                    if (!$invariant->allows($candidate, $i, $words, $grid)) {
+                        return false;
+                    }
+                }
+                return true;
             };
 
             // Where the plan pins the first letter, draw from that letter's own words
             // instead of scanning the whole pool -- the difference is large at full size.
-            $pinned = $cellPlan->firstLetter($words);
+            $pinned = $cellPlan->firstLetter($words, $i);
             $words[$i] = $pinned === null
                 ? $dictionary->fillerMatching($predicate, $cellPlan->label())
                 : $dictionary->fillerStartingWith($pinned, $predicate, $cellPlan->label());
+
+            foreach ($invariants as $invariant) {
+                $invariant->record($words[$i], $i, $grid);
+            }
         }
 
         return $words;

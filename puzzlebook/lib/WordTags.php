@@ -117,6 +117,85 @@ final class WordTags
             && in_array(self::lastLetter($word), $letters, true);
     }
 
+    /** Standard English Scrabble tile values. */
+    private const SCRABBLE = [
+        'a' => 1, 'b' => 3, 'c' => 3, 'd' => 2, 'e' => 1, 'f' => 4, 'g' => 2, 'h' => 4,
+        'i' => 1, 'j' => 8, 'k' => 5, 'l' => 1, 'm' => 3, 'n' => 1, 'o' => 1, 'p' => 3,
+        'q' => 10, 'r' => 1, 's' => 1, 't' => 1, 'u' => 1, 'v' => 4, 'w' => 4, 'x' => 8,
+        'y' => 4, 'z' => 10,
+    ];
+
+    /** Sum of the letters' alphabet positions: A=1, B=2 ... Z=26. */
+    public static function letterSum(string $word): int
+    {
+        $sum = 0;
+        for ($i = 0, $len = strlen($word); $i < $len; $i++) {
+            $sum += ord($word[$i]) - 96;
+        }
+        return $sum;
+    }
+
+    public static function isPrime(int $n): bool
+    {
+        if ($n < 2) {
+            return false;
+        }
+        for ($d = 2; $d * $d <= $n; $d++) {
+            if ($n % $d === 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The consonant/vowel shape of $word as a string of C and V -- "banana" is
+     * "CVCVCV". Y counts as a consonant, as everywhere else here.
+     */
+    public static function consonantVowelPattern(string $word): string
+    {
+        $pattern = '';
+        for ($i = 0, $len = strlen($word); $i < $len; $i++) {
+            $pattern .= self::isVowel($word[$i]) ? 'V' : 'C';
+        }
+        return $pattern;
+    }
+
+    /** The highest number of times any single letter in $letters appears in $word. */
+    public static function maxRepeatAmong(string $word, array $letters): int
+    {
+        $counts = [];
+        for ($i = 0, $len = strlen($word); $i < $len; $i++) {
+            $letter = $word[$i];
+            if (in_array($letter, $letters, true)) {
+                $counts[$letter] = ($counts[$letter] ?? 0) + 1;
+            }
+        }
+        return $counts === [] ? 0 : max($counts);
+    }
+
+    /** What $word would score in Scrabble, ignoring board bonuses. */
+    public static function scrabbleScore(string $word): int
+    {
+        $score = 0;
+        for ($i = 0, $len = strlen($word); $i < $len; $i++) {
+            $score += self::SCRABBLE[$word[$i]] ?? 0;
+        }
+        return $score;
+    }
+
+    /** How many of $word's letters are vowels (Y never counts). */
+    public static function vowelCount(string $word): int
+    {
+        $count = 0;
+        for ($i = 0, $len = strlen($word); $i < $len; $i++) {
+            if (self::isVowel($word[$i])) {
+                $count++;
+            }
+        }
+        return $count;
+    }
+
     /** True if every letter in $word is one of $allowedLetters (each a single lowercase letter). */
     public static function usesOnlyLetters(string $word, array $allowedLetters): bool
     {

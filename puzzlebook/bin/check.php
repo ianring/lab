@@ -32,8 +32,16 @@ declare(strict_types=1);
  * Exit 0 means no blockers; 1 means at least one.
  */
 
+// A full-size book is 12,000 cells laid out against a 133,000-word list, which needs
+// more than PHP's usual 128M default. Raised here so this works out of the box rather
+// than needing a php.ini change -- left alone if the limit is already unlimited.
+if ((int) ini_get('memory_limit') !== -1) {
+    ini_set('memory_limit', '512M');
+}
+
 require __DIR__ . '/../lib/bootstrap.php';
 
+use Puzzlebook\ChainBuilder;
 use Puzzlebook\ChainPlan;
 use Puzzlebook\Engine;
 use Puzzlebook\Grid;
@@ -126,14 +134,21 @@ try {
 // then be the only word in the book that didn't come from the pool. Usually that's
 // invisible; it's only awkward if the word also stands out in some other way (being
 // longer than anything else, say).
-$pool = file($wordlistPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
-$poolIndex = array_fill_keys($pool, true);
-$notInPool = [];
-foreach (array_merge([$answer], $revealWords) as $word) {
-    if (!isset($poolIndex[$word])) {
-        $notInPool[] = $word;
+//
+// Checked with one streaming pass rather than by building an index: a hash table keyed
+// on 133,000 strings costs several megabytes, and we only have a dozen words to look up.
+$wanted = array_fill_keys(array_merge([$answer], $revealWords), false);
+$scan = fopen($wordlistPath, 'r');
+if ($scan !== false) {
+    while (($line = fgets($scan)) !== false) {
+        $word = trim($line);
+        if (array_key_exists($word, $wanted)) {
+            $wanted[$word] = true;
+        }
     }
+    fclose($scan);
 }
+$notInPool = array_keys(array_filter($wanted, static fn (bool $found): bool => !$found));
 if ($notInPool !== []) {
     echo "\n  note: " . implode(', ', $notInPool) . ' not in the word list. '
         . (count($notInPool) === 1 ? 'It' : 'They') . " will still be placed, but won't\n"
@@ -153,26 +168,36 @@ if ($targetSurvivors > $size) {
     $problems[] = "The reveal needs {$targetSurvivors} surviving words but the book is only {$size} cells.";
 }
 
-$available = $size - $targetSurvivors;
-try {
-    $budgets = $plan->budgetsFor($available, $size);
-} catch (Throwable $e) {
-    echo "\nBLOCKED: " . $e->getMessage() . "\n";
+// Lay the book out for real -- no words chosen, just which rule claims which cell and
+// what shape each cell's word must be. Everything below is read off this, so the
+// numbers are what the build will really do rather than what the fractions imply.
+$canvas = null;
+$layoutError = null;
+for ($try = 0; $try < 25 && $canvas === null; $try++) {
+    try {
+        $canvas = ChainBuilder::layOutCells($try, $grid, $plan, $chain);
+    } catch (Throwable $e) {
+        $layoutError = $e->getMessage();
+    }
+}
+
+if ($canvas === null) {
+    echo "\nBLOCKED: the cells couldn't be laid out in 25 attempts, before any words were chosen.\n";
+    echo "         last reason: {$layoutError}\n";
     exit(1);
 }
 
-echo "\nPacing -- how many cells each rule claims (the last keep_fraction step absorbs the slack):\n";
+echo "\nPacing -- cells each rule actually claims in a real layout:\n";
+$claims = $canvas->claimsByStep();
 $runningLeft = $size;
-foreach ($budgets as $stepId => $budget) {
-    $runningLeft -= $budget;
-    $pct = $size > 0 ? round($budget / $size * 100, 1) : 0.0;
-    echo "  step {$stepId}: claims {$budget} cells ({$pct}% of the book)\n";
-    if ($budget < 0) {
-        $problems[] = "Step {$stepId} would have to claim {$budget} cells (a negative number): the other "
-            . 'keep_fractions already account for more of the book than is left. Raise one of them.';
-    }
+foreach ($claims as $stepId => $claimed) {
+    $runningLeft -= $claimed;
+    $pct = $size > 0 ? round($claimed / $size * 100, 1) : 0.0;
+    $sized = $plan->hasBudget($stepId) ? '' : '  [sizes itself]';
+    echo '  step ' . str_pad((string) $stepId, 2) . ': removes ' . str_pad((string) $claimed, 5)
+        . " ({$pct}% of the book), leaving {$runningLeft}{$sized}\n";
 }
-echo "  survivors left standing for the reveal: {$targetSurvivors}\n\n";
+echo "  still standing for the reveal: " . $canvas->survivorCount() . "\n\n";
 
 // ------------------------------------------------- 4. dictionary supply
 
@@ -196,101 +221,115 @@ $survivesThrough = static function (string $word, int $through) use ($spellingRu
 
 // The pool that passes EVERY rule is the one that shrinks multiplicatively as rules
 // are added, and it's the hard ceiling on how big a chain can get. Show it shrinking.
+//
+// Done with one pass per word rather than by rebuilding the whole list per rule: each
+// word is tested against the rules in order and we record where it first fails, so this
+// needs a dozen counters instead of a dozen copies of a 133,000-word array.
 echo "The \"passes every rule so far\" pool, rule by rule -- this is the ceiling on chain length:\n";
-$poolAfter = [];
+
 $eligible = [];
 foreach ($words as $w) {
-    if ($excluded !== '' && $w[0] === $excluded) {
-        continue;
+    if ($excluded === '' || $w[0] !== $excluded) {
+        $eligible[] = $w;
     }
-    $eligible[] = $w;
 }
-$running = $eligible;
-echo '  before any rule: ' . count($running) . " words\n";
+unset($words);   // the filtered list is the only one we need from here on
+
+$diesAt = array_fill(0, $spellingCount, 0);
+$survivesEverything = 0;
+foreach ($eligible as $w) {
+    $failedAt = null;
+    for ($j = 0; $j < $spellingCount; $j++) {
+        if ($spellingRules[$j]->failsWord($w)) {
+            $failedAt = $j;
+            break;
+        }
+    }
+    if ($failedAt === null) {
+        $survivesEverything++;
+    } else {
+        $diesAt[$failedAt]++;
+    }
+}
+
+$stillStanding = count($eligible);
+echo '  before any rule: ' . $stillStanding . " words\n";
 for ($j = 0; $j < $spellingCount; $j++) {
-    $next = [];
-    foreach ($running as $w) {
-        if (!$spellingRules[$j]->failsWord($w)) {
-            $next[] = $w;
-        }
-    }
-    $died = count($running) - count($next);
-    $running = $next;
-    $poolAfter[$j] = count($running);
-    echo "  after rule #" . ($j + 1) . ': ' . count($running)
-        . " words survive (it can remove at most {$died}) -- " . $spellingRules[$j]->describe() . "\n";
+    $stillStanding -= $diesAt[$j];
+    echo '  after rule #' . ($j + 1) . ': ' . $stillStanding
+        . " words survive (it can remove at most {$diesAt[$j]}) -- " . $spellingRules[$j]->describe() . "\n";
 }
-$survivesEverything = count($running);
-echo "\n";
+echo "  -> {$survivesEverything} words pass all {$spellingCount} rules. Everything still standing at the\n";
+echo "     reveal has to come from that pool, and it shrinks every time a rule is added.\n\n";
 
-echo "Word supply -- what each role needs vs. what the list can provide:\n";
+// Lay the book out for real -- no words chosen, just which rule claims which cell and
+// what shape each cell's word must be -- then read the demands straight off it. Doing
+// it this way means EVERY rule gets checked, positional ones included: a rule can't be
+// left out, because the demand being tested is the one the rule itself declared.
+echo "Word supply -- every demand the rules actually make, read from a real layout:\n";
 
-// Each spelling rule can only ever remove words it actually matches, from among
-// those that got past the earlier rules.
-$spellingStepIds = [];
-foreach ($plan->constructorsByPriority() as [$stepId, $rule]) {
-    if ($rule instanceof SpellingRule) {
-        $spellingStepIds[$stepId] = $rule;
-    }
-}
-
-// Track the notional remainder the keep_fractions act on, so a step that's short can
-// be told the keep_fraction that WOULD fit -- at full book size these can't be
-// eyeballed, and guessing them one build at a time is exactly the slow loop this
-// script exists to replace.
-$notionalRemaining = $size;
-$ruleIndex = 0;
-
+$stepNames = [];
 foreach ($chain['steps'] as $step) {
-    if (($step['kind'] ?? '') !== 'eliminate' || !empty($step['final'])) {
+    if (($step['kind'] ?? '') === 'eliminate') {
+        $stepNames[$step['id']] = Engine::ruleFromConfig($step['rule'])->describe();
+    }
+}
+
+foreach ($canvas->demandsByLabel() as $label => $demand) {
+    $cellPlan = $demand['plan'];
+    $needed = $demand['cells'];
+    $prefix = $cellPlan->survivesPrefix();
+    $steps = $demand['steps'] === [] ? '-' : implode(',', $demand['steps']);
+
+    // Cells holding a predetermined word -- the answer, the revealed phrase -- have no
+    // supply requirement at all: the word is assigned straight to its cell and never
+    // looked up. They also can't be counted as a group, because each one wants a
+    // DIFFERENT specific word while the group carries a single representative plan;
+    // testing that plan against the list asks "how many words equal 'eliminate'?" and
+    // compares the answer, 1, against all 13 cells. Whether these words are in the list
+    // is reported separately, further up.
+    if ($cellPlan->literalWord() !== null) {
+        echo '  ok      ' . str_pad($label, 14) . 'needs ' . str_pad((string) $needed, 5)
+            . "set in advance, placed directly (no supply needed)\n";
         continue;
     }
-    $stepId = $step['id'];
-    $needed = $budgets[$stepId] ?? 0;
 
-    if (!isset($spellingStepIds[$stepId])) {
-        // Positional rules have no word-shape supply limit worth reporting.
-        $notionalRemaining -= $needed;
+    // A plan whose shape depends on a neighbour's word (the right half of a
+    // deliberate pair) can't be counted in isolation -- there's no neighbour yet.
+    // Say so rather than reporting a misleading zero.
+    if ($cellPlan->allowsLeftMatch()) {
+        echo '  ok      ' . str_pad($label, 14) . "needs " . str_pad((string) $needed, 5)
+            . " depends on its neighbour's word (checked during the build)\n";
         continue;
     }
 
-    $rule = $spellingStepIds[$stepId];
-    $availableForStep = 0;
+    $available = 0;
     foreach ($eligible as $w) {
-        if ($survivesThrough($w, $ruleIndex) && $rule->failsWord($w)) {
-            $availableForStep++;
+        if ($survivesThrough($w, $prefix) && $cellPlan->shapeAllows($w, [])) {
+            $available++;
         }
     }
 
-    $verdict = $availableForStep >= $needed ? 'ok     ' : 'BLOCKED';
-    echo "  {$verdict} step " . str_pad((string) $stepId, 2) . " needs {$needed}, has {$availableForStep}"
-        . "   ({$rule->describe()})\n";
+    $verdict = $available >= $needed ? 'ok     ' : 'BLOCKED';
+    echo "  {$verdict} " . str_pad($label, 14) . 'needs ' . str_pad((string) $needed, 5)
+        . 'has ' . str_pad((string) $available, 7)
+        . "(step {$steps}: " . ($stepNames[$demand['steps'][0] ?? 0] ?? 'reserved words') . ")\n";
 
-    if ($availableForStep < $needed) {
-        // Budget is round(remaining * (1 - keep_fraction)), so the fraction that asks
-        // for exactly what exists is 1 - available/remaining. Back off a little so
-        // rounding can't push it over again.
-        $suggestion = $notionalRemaining > 0
-            ? 1 - (($availableForStep * 0.95) / $notionalRemaining)
-            : 1.0;
-        $suggestion = min(0.9999, max(0.0, $suggestion));
-        $problems[] = "Step {$stepId} needs {$needed} words that pass every earlier rule and fail it, but the "
-            . "list only has {$availableForStep}. Set its keep_fraction to about "
-            . number_format($suggestion, 4) . " (it's " . $step['construction']['keep_fraction'] . ' now), '
-            . 'or move it earlier in the chain where more words are still eligible.';
+    if ($available < $needed) {
+        $stepId = $demand['steps'][0] ?? null;
+        $fractionNow = null;
+        foreach ($chain['steps'] as $step) {
+            if (($step['id'] ?? null) === $stepId) {
+                $fractionNow = $step['construction']['keep_fraction'] ?? null;
+            }
+        }
+        $advice = $fractionNow === null
+            ? 'This rule sizes itself from its own geometry, so reduce what it asks for by narrowing '
+                . 'its parameters, or give it more pages to work with.'
+            : "Raise step {$stepId}'s keep_fraction above {$fractionNow} so it asks for fewer.";
+        $problems[] = "The '{$label}' cells need {$needed} words of a shape the list only has "
+            . "{$available} of. {$advice}";
     }
-
-    $notionalRemaining -= $needed;
-    $ruleIndex++;
-}
-
-// Everything that has to be standing at the reveal comes from the survives-everything
-// pool, as do the deliberate pairs (which survive the rules before their own step).
-$verdict = $survivesEverything >= $targetSurvivors ? 'ok     ' : 'BLOCKED';
-echo "  {$verdict} survivors: needs {$targetSurvivors} words that pass every rule, has {$survivesEverything}\n";
-if ($survivesEverything < $targetSurvivors) {
-    $problems[] = "{$targetSurvivors} words have to pass every spelling rule to still be standing at the "
-        . "reveal, but only {$survivesEverything} in the list can. Loosen a rule, or use fewer of them.";
 }
 
 echo "\n";

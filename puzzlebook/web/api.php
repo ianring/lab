@@ -26,7 +26,7 @@ require __DIR__ . '/../lib/bootstrap.php';
 use Puzzlebook\Engine;
 use Puzzlebook\Grid;
 
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
 
 function apiFail(string $message, int $status = 400): void
 {

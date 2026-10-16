@@ -55,12 +55,21 @@ declare(strict_types=1);
  *
  *   1. Reading order is page by page, then row by row, left to right.
  *   2. "Surviving" / "survivors" means words not yet crossed out.
- *   3. For the matching-neighbour-ends rule, a crossed-out word still counts
- *      as a neighbour -- a highlighter mark doesn't erase the printed word.
- *   4. For the knight's-move rule, the opposite: it says "SURVIVING five
- *      letter words", so a word already crossed out is NOT a launch pad.
- *      Each rule says which it means.
- *   5. Y is never treated as a vowel.
+ *   3. NO RULE EVER ASKS YOU TO READ A WORD YOU HAVE ALREADY CROSSED OUT.
+ *      Once a word is gone it is gone: it can't trigger a later rule, and it
+ *      can't be half of a pair. Rules that look at neighbouring cells only
+ *      ever consider neighbours still standing.
+ *
+ *      This is a constraint on the BOOK, not just a convention for the
+ *      reader. People mark up puzzles with whatever is to hand, and a marker
+ *      obliterates a word rather than veiling it -- so any rule needing the
+ *      letters of an eliminated word would be literally unsolvable for them.
+ *      An earlier version of the side-by-side rule got this wrong.
+ *
+ *      Noticing that a word has been crossed out is still fair game: you can
+ *      see a struck word is struck without reading it, which is why step 11
+ *      works.
+ *   4. Y is never treated as a vowel.
  */
 
 return [
@@ -233,9 +242,8 @@ return [
                     'remove_trigger' => true,
                 ],
             ],
-            'rule_text' => 'Find every word whose 2nd letter is J. Cross out that word, and also cross '
-                . 'out the word in the same row and column on the NEXT page. (A J-word already crossed '
-                . 'out still counts -- what matters is what is printed.)',
+            'rule_text' => 'Find every word still standing whose 2nd letter is J. Cross out that word, '
+                . 'and also cross out the word in the same row and column on the NEXT page.',
             'construction' => ['keep_fraction' => 0.99],
         ],
         [
@@ -243,9 +251,9 @@ return [
             'kind' => 'eliminate',
             'printed' => true,
             'rule' => ['type' => 'matching_neighbour_ends', 'params' => []],
-            'rule_text' => 'Cross out every pair of side-by-side words, in the same row, where the '
-                . 'left word ends in the same letter the right word starts with. Cross out BOTH words '
-                . 'of the pair. A word already crossed out still counts as a neighbour here.',
+            'rule_text' => 'Find every pair of side-by-side words, in the same row, where BOTH are '
+                . 'still standing and the left word ends in the same letter the right word starts '
+                . 'with. Cross out both words of the pair.',
             // Absorbs whatever the rules above leave behind, since it's the last step
             // with a keep_fraction and a pair can be made from any two words.
             'construction' => ['keep_fraction' => 0.55, 'pairs' => true],

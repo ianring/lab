@@ -3,6 +3,13 @@
 
 declare(strict_types=1);
 
+// A full-size book is 12,000 cells laid out against a 133,000-word list, and the
+// builder may try many arrangements -- more than PHP's usual 128M default allows.
+// Raised here so this works out of the box rather than needing a php.ini change.
+if ((int) ini_get('memory_limit') !== -1) {
+    ini_set('memory_limit', '512M');
+}
+
 require __DIR__ . '/../lib/bootstrap.php';
 
 use Puzzlebook\ChainBuilder;

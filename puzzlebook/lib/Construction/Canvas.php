@@ -48,6 +48,9 @@ final class Canvas
     /** @var array<int,bool> survivor cells whose word is incidental and may be swapped out */
     private array $replaceable = [];
 
+    /** @var FillInvariant[] conditions spanning many cells, enforced while words are chosen */
+    private array $invariants = [];
+
     public function __construct(Grid $grid)
     {
         $this->grid = $grid;
@@ -207,6 +210,78 @@ final class Canvas
     public function planFor(int $cell): ?CellPlan
     {
         return $this->plans[$cell];
+    }
+
+    /**
+     * Register a condition spanning many cells, for a rule that fires on coincidences
+     * between words rather than on any one word's own letters. See FillInvariant.
+     */
+    public function addInvariant(FillInvariant $invariant): void
+    {
+        $this->invariants[] = $invariant;
+    }
+
+    /** @return FillInvariant[] */
+    public function invariants(): array
+    {
+        return $this->invariants;
+    }
+
+    /**
+     * How many cells each step actually ends up eliminating, keyed by step id.
+     *
+     * Worth having separately from the budgets: a rule whose reach is derived from its
+     * own geometry has no budget at all, and a rule that claims cells in groups may not
+     * spend its budget exactly. This is what really happened.
+     *
+     * @return array<int,int> step id => cells claimed
+     */
+    public function claimsByStep(): array
+    {
+        $counts = [];
+        foreach ($this->killedBy as $stepId) {
+            if ($stepId === null) {
+                continue;
+            }
+            $counts[$stepId] = ($counts[$stepId] ?? 0) + 1;
+        }
+        ksort($counts);
+        return $counts;
+    }
+
+    /**
+     * Every distinct kind of word this layout asks for, with how many cells want it
+     * and which step asked -- grouped by the plans' labels.
+     *
+     * This is what makes bin/check.php able to report on EVERY rule rather than only
+     * the spelling ones: instead of keeping its own idea of what each rule needs, it
+     * reads the demands the rules actually declared while laying out their cells. A
+     * rule with a word-shape requirement can't be left out of the check, because the
+     * requirement is right here in the plan it wrote.
+     *
+     * @return array<string, array{cells: int, plan: CellPlan, steps: int[]}>
+     */
+    public function demandsByLabel(): array
+    {
+        $demands = [];
+        foreach ($this->plans as $cell => $plan) {
+            if ($plan === null) {
+                continue;
+            }
+            $label = $plan->label();
+            if (!isset($demands[$label])) {
+                $demands[$label] = ['cells' => 0, 'plan' => $plan, 'steps' => []];
+            }
+            $demands[$label]['cells']++;
+            $step = $this->killedBy[$cell];
+            if ($step !== null && !in_array($step, $demands[$label]['steps'], true)) {
+                $demands[$label]['steps'][] = $step;
+            }
+        }
+        foreach ($demands as $label => $_) {
+            sort($demands[$label]['steps']);
+        }
+        return $demands;
     }
 
     public function killedByFor(int $cell): ?int

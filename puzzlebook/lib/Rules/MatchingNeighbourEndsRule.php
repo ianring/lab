@@ -12,11 +12,21 @@ use Puzzlebook\Grid;
 use Puzzlebook\WordTags;
 
 /**
- * Cross out every horizontally adjacent pair of cells, in the same row,
- * where the left word's last letter equals the right word's first letter --
- * disqualifying BOTH words in the pair, not just one. A crossed-out word
- * still counts as a neighbour here: this reads what is printed, not what is
- * still highlighted.
+ * Cross out every horizontally adjacent pair of STILL-SURVIVING words, in
+ * the same row, where the left word's last letter equals the right word's
+ * first letter -- disqualifying both words of the pair.
+ *
+ * BOTH HALVES MUST STILL BE STANDING. An earlier version read whatever was
+ * printed, crossed out or not, which quietly assumed the reader marks up the
+ * book with something translucent. Plenty of people will reach for a marker
+ * instead, and then an eliminated word is simply gone -- so a rule that
+ * needs its letters is unsolvable. No rule in this book requires reading a
+ * word that has already been crossed out.
+ *
+ * Reading from a snapshot matters here, not just for tidiness: the two halves
+ * have to count each other as surviving simultaneously. Checking live state
+ * mid-pass would let the left word's removal stop the right one from being
+ * removed, making the outcome depend on scan order.
  *
  * Positional, so there's no single per-word check to extract: whether a word
  * dies depends entirely on the word beside it. construct() therefore picks
@@ -38,11 +48,16 @@ final class MatchingNeighbourEndsRule implements RuleInterface, ConstructsCells
 
     public function apply(array $words, Grid $grid, array $keep): array
     {
+        $keepBefore = $keep;
+
         for ($page = 0; $page < $grid->pages; $page++) {
             for ($row = 0; $row < $grid->rows; $row++) {
                 for ($col = 0; $col < $grid->cols - 1; $col++) {
                     $left = $grid->linearIndex($page, $row, $col);
                     $right = $grid->linearIndex($page, $row, $col + 1);
+                    if (!$keepBefore[$left] || !$keepBefore[$right]) {
+                        continue;
+                    }
                     if (WordTags::lastLetter($words[$left]) === WordTags::firstLetter($words[$right])) {
                         $keep[$left] = false;
                         $keep[$right] = false;
@@ -72,34 +87,30 @@ final class MatchingNeighbourEndsRule implements RuleInterface, ConstructsCells
 
         $survivesBefore = $context->spellingRulesBefore();
 
+        // Two shared plans for the whole rule, not one per cell -- see CellPlan.
+        //
+        // Left half: its LAST letter becomes the right half's required FIRST letter, so
+        // it has to be a letter plenty of words begin with. Left unconstrained, a left
+        // word ending in q, x or z would demand a right word starting with it, and
+        // there are only a handful of those in the language. At prototype size that's a
+        // rare annoyance; with thousands of pairs it's a guaranteed failure.
+        $leftPlan = new CellPlan(
+            $survivesBefore,
+            static fn (string $word): bool => in_array(WordTags::lastLetter($word), self::USABLE_JOIN_LETTERS, true),
+            'pairleft'
+        );
+
+        // Right half: resolved at fill time, once the left half actually has a word --
+        // the one place a cell's requirement depends on its neighbour rather than on
+        // anything decided up front. It finds that neighbour from its own cell index,
+        // which is what lets every pair share this one plan. It also marks the letter
+        // collision as wanted, so the builder doesn't try to avoid it.
+        $rightPlan = CellPlan::matchingRightHalf($survivesBefore, 'pairright');
+
         for ($n = 0; $n < $pairsWanted; $n++) {
             [$left, $right] = $candidates[$n];
-
-            // The left half's LAST letter becomes the right half's required FIRST
-            // letter, so it has to be a letter plenty of words begin with. Left
-            // unconstrained, a left word ending in q, x or z would demand a right word
-            // starting with it, and there are only a handful of those in the language.
-            // At prototype size that's a rare annoyance; at full size, with thousands
-            // of pairs to place, it's a guaranteed failure.
-            $canvas->claimDoomed(
-                $left,
-                $context->stepId(),
-                new CellPlan(
-                    $survivesBefore,
-                    static fn (string $word): bool => in_array(WordTags::lastLetter($word), self::USABLE_JOIN_LETTERS, true),
-                    'pairleft'
-                )
-            );
-
-            // The right half is resolved at fill time, once the left half actually has
-            // a word -- the one place a cell's requirement depends on its neighbour's
-            // word rather than on anything decided up front. matchingRightHalf() also
-            // marks the collision as wanted, so the builder doesn't try to avoid it.
-            $canvas->claimDoomed(
-                $right,
-                $context->stepId(),
-                CellPlan::matchingRightHalf($survivesBefore, 'pairright', $left)
-            );
+            $canvas->claimDoomed($left, $context->stepId(), $leftPlan);
+            $canvas->claimDoomed($right, $context->stepId(), $rightPlan);
         }
     }
 
@@ -112,6 +123,6 @@ final class MatchingNeighbourEndsRule implements RuleInterface, ConstructsCells
 
     public function describe(): string
     {
-        return "side-by-side pairs where the left word ends on the right word's first letter";
+        return "side-by-side SURVIVING pairs where the left word ends on the right word's first letter";
     }
 }

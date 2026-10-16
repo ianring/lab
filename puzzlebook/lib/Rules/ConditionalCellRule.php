@@ -82,6 +82,14 @@ final class ConditionalCellRule implements RuleInterface, ConstructsCells
         $killerRule = $earlier[$killerStepId];
         $killerIndex = count($earlier) - 1;
 
+        // One plan of each kind for the whole rule -- see CellPlan.
+        $triggerPlan = new CellPlan(
+            $killerIndex,
+            static fn (string $word): bool => $killerRule->failsWord($word),
+            'trigger' . $context->stepId()
+        );
+        $targetPlan = CellPlan::surviving($context->spellingRulesBefore(), 'conditional' . $context->stepId());
+
         $firedOn = 0;
 
         for ($page = 0; $page < $grid->pages; $page++) {
@@ -98,23 +106,11 @@ final class ConditionalCellRule implements RuleInterface, ConstructsCells
 
             // The trigger: shaped to be crossed out by an earlier rule, so by the time
             // this step runs it is reliably gone and this rule reliably fires.
-            $canvas->claimDoomed(
-                $triggerCell,
-                $killerStepId,
-                new CellPlan(
-                    $killerIndex,
-                    static fn (string $word): bool => $killerRule->failsWord($word),
-                    'trigger' . $context->stepId()
-                )
-            );
+            $canvas->claimDoomed($triggerCell, $killerStepId, $triggerPlan);
 
             // The target: nothing special about its letters, it just has to still be
             // standing when this step arrives.
-            $canvas->claimDoomed(
-                $targetCell,
-                $context->stepId(),
-                CellPlan::surviving($context->spellingRulesBefore(), 'conditional' . $context->stepId())
-            );
+            $canvas->claimDoomed($targetCell, $context->stepId(), $targetPlan);
 
             $firedOn++;
         }
