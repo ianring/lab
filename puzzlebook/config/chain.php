@@ -69,7 +69,19 @@ declare(strict_types=1);
  *      Noticing that a word has been crossed out is still fair game: you can
  *      see a struck word is struck without reading it, which is why step 11
  *      works.
- *   4. Y is never treated as a vowel.
+ *   4. A STEP LOOKS AT THE BOOK AS IT WAS WHEN THE STEP BEGAN. Work out
+ *      everything a step crosses out first, then cross it all out together.
+ *      A word removed by a step still counts, for the rest of that same step,
+ *      as having been there.
+ *
+ *      This matters wherever a rule's trigger is itself the sort of thing the
+ *      rule removes. Two five-letter words a knight's move apart (step 15)
+ *      cross EACH OTHER out: if you worked left to right, striking the first
+ *      would spare the second, and you'd end the book with a word too many.
+ *      Steps 12 and 13 have the same property. The engine computes each step
+ *      from a snapshot, so this is what the book actually does -- the reader
+ *      has to be told.
+ *   5. Y is never treated as a vowel.
  */
 
 return [
@@ -243,7 +255,8 @@ return [
                 ],
             ],
             'rule_text' => 'Find every word still standing whose 2nd letter is J. Cross out that word, '
-                . 'and also cross out the word in the same row and column on the NEXT page.',
+                . 'and also cross out the word in the same row and column on the NEXT page. Find all '
+                . 'the J-words before you cross any of them out.',
             'construction' => ['keep_fraction' => 0.99],
         ],
         [
@@ -253,7 +266,8 @@ return [
             'rule' => ['type' => 'matching_neighbour_ends', 'params' => []],
             'rule_text' => 'Find every pair of side-by-side words, in the same row, where BOTH are '
                 . 'still standing and the left word ends in the same letter the right word starts '
-                . 'with. Cross out both words of the pair.',
+                . 'with. Cross out both words of the pair. Find all the pairs before you cross any '
+                . 'of them out.',
             // Absorbs whatever the rules above leave behind, since it's the last step
             // with a keep_fraction and a pair can be made from any two words.
             'construction' => ['keep_fraction' => 0.55, 'pairs' => true],
@@ -280,9 +294,12 @@ return [
             'kind' => 'eliminate',
             'printed' => false,
             'rule' => ['type' => 'knight_adjacent_surviving_length', 'params' => ['length' => 5]],
-            'rule_text' => 'Cross out every surviving word that is a knight\'s chess move from a '
-                . 'SURVIVING five-letter word on the same page. (A word already crossed out is not a '
-                . 'launch pad for this rule -- it must still be standing.)',
+            'rule_text' => 'A knight\'s chess move is two cells one way and one cell the other. '
+                . 'Find every word that sits a knight\'s move from a FIVE-LETTER word on the same '
+                . 'page, where both words are still standing, and cross it out. A five-letter word '
+                . 'is not spared by being one: if two five-letter words are a knight\'s move apart, '
+                . 'both are crossed out. Mark everything this rule catches before you cross any of '
+                . 'it out.',
             'construction' => ['derived' => true],
         ],
 

@@ -24,6 +24,16 @@
     --accent-active: #2e6f5c;
     --accent-active-ink: #f4f7f2;
     --shadow: rgba(30, 36, 26, 0.12);
+
+    /* The simulated sheet. These are deliberately NOT themed: the point is to
+       show what comes off a printer, and paper is white under any theme. The
+       surrounding app chrome still follows the theme, which gives the same
+       dark-app / light-document split a print preview normally has. */
+    --desk: #d9dad5;
+    --sheet: #ffffff;
+    --sheet-ink: #000000;
+    --sheet-faint: #9a9a9a;
+    --sheet-rule: #d8d8d8;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -170,14 +180,18 @@
     border-right: 1px solid var(--rule-line);
   }
 
+  /* The "desk" the sheets sit on. Light grey so white paper reads as paper
+     rather than as the background. */
   .book {
-    flex: 1 1 auto;
+    flex: 1 1 0%;
     min-width: 0;
-    padding: 1.4rem 1.8rem 4rem;
+    padding: 2rem 1.8rem 4rem;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.6rem;
+    gap: 2rem;
+    background: var(--desk);
+    overflow-x: auto;
   }
 
   @media (max-width: 900px) {
@@ -280,92 +294,108 @@
 
   /* ---------- book pages ---------- */
 
+  /* A sheet of US Letter paper. Fixed size, nothing computed: 68rem x 88rem
+     is exactly 8.5 x 11, and an 8rem pad is exactly 1 inch of it (68 / 8.5). */
   .page {
-    width: 100%;
-    max-width: 640px;
-    background: var(--paper-raised);
-    border: 1px solid var(--rule-line);
-    border-radius: 10px;
-    box-shadow: 0 3px 14px var(--shadow);
-    padding: 0.9rem 0.9rem 1.1rem;
+    width: 68rem;
+    height: 88rem;
+    flex: 0 0 auto;
+    padding: 8rem;
+    background: var(--sheet);
+    color: var(--sheet-ink);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), 0 8px 24px rgba(0, 0, 0, 0.17);
+    display: flex;
+    flex-direction: column;
   }
+
   .page-head {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 0.55rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px solid var(--rule-line-soft);
+    margin-bottom: 1rem;
+    flex: 0 0 auto;
   }
   .page-head h3 {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    color: var(--ink-soft);
-    letter-spacing: 0.04em;
+    color: var(--sheet-faint);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
   .page-count {
     font-family: "IBM Plex Mono", monospace;
-    font-size: 0.7rem;
-    color: var(--ink-soft);
+    font-size: 0.75rem;
+    color: var(--sheet-faint);
   }
 
+  /* Fills the rest of the sheet, so 20 rows land inside the bottom margin. */
   .grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 3px;
+    grid-template-columns: repeat(6, 1fr);   /* replaced from the book's data */
+    grid-auto-rows: 1fr;
+    flex: 1 1 auto;
+    min-height: 0;
+    column-gap: 0.5rem;
   }
 
   .cell {
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-family: "IBM Plex Mono", monospace;
-    font-size: 0.62rem;
+    font-size: 1rem;
     text-transform: uppercase;
     letter-spacing: 0.01em;
     text-align: center;
-    padding: 0.3rem 0.15rem 0.22rem;
-    border-radius: 4px;
-    background: var(--paper);
-    color: var(--ink);
-    line-height: 1.15;
-    word-break: break-all;
+    color: var(--sheet-ink);
+    line-height: 1.1;
+    overflow: hidden;
   }
 
+  /* Position numbers are proofing aids, not part of the printed book. */
   .cell .idx {
     position: absolute;
-    top: 1px;
-    left: 2px;
-    font-size: 0.48rem;
-    color: var(--ink-soft);
-    opacity: 0.55;
+    top: 0;
+    left: 0;
+    font-size: 0.55rem;
+    color: var(--sheet-faint);
+    opacity: 0.75;
   }
 
+  /* A crossed-out word stays readable here on purpose -- the preview is for
+     proofing, so you need to see WHAT was removed, not just that something was. */
+  /* Black word, black rule -- a printed book marked up in pen, not a diff view.
+     text-decoration-color is left to default to currentColor, so the strike can
+     never drift away from the ink colour. */
   .cell.struck {
     text-decoration: line-through;
-    text-decoration-color: var(--accent-strike);
     text-decoration-thickness: 1.5px;
   }
 
+  /* Reads as a highlighter stroke on the paper rather than a filled table cell. */
   .cell.revealed {
     background: var(--accent-mark);
-    color: var(--accent-mark-ink);
+    color: var(--sheet-ink);
     box-shadow: 0 0 0 2px var(--accent-mark);
   }
-  .cell.revealed .idx { color: var(--accent-mark-ink); opacity: 0.6; }
+  .cell.revealed .idx { color: var(--sheet-ink); opacity: 0.5; }
 
+  /* Highlighted AND crossed out: black rule over the yellow, same as anywhere else. */
   .cell.revealed.struck {
-    text-decoration-color: var(--accent-mark-ink);
+    text-decoration-color: var(--sheet-ink);
   }
 
   .cell .order-badge {
     position: absolute;
-    top: -6px;
-    right: -6px;
-    width: 14px;
-    height: 14px;
+    top: 0;
+    right: 0;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    background: var(--ink);
-    color: var(--paper);
-    font-size: 0.5rem;
+    background: var(--sheet-ink);
+    color: var(--sheet);
+    font-size: 7px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -375,21 +405,22 @@
 
   .cell.answer {
     box-shadow: 0 0 0 2px var(--accent-active);
-    font-weight: 600;
+    font-weight: 700;
   }
 
+  /* Sits on the desk alongside the sheets, so it matches their width and takes
+     its colour from the desk rather than from the themed chrome. */
   .legend {
     display: flex;
     flex-wrap: wrap;
     gap: 0.9rem;
     font-size: 0.72rem;
-    color: var(--ink-soft);
-    max-width: 640px;
-    width: 100%;
+    color: #4a4a4a;
+    width: 68rem;
   }
   .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
   .swatch { width: 0.75rem; height: 0.75rem; border-radius: 3px; display: inline-block; }
-  .swatch.struck { background: var(--accent-strike-soft); }
+  .swatch.struck { background: var(--sheet-ink); }
   .swatch.revealed { background: var(--accent-mark); }
   .swatch.answer { background: transparent; border: 2px solid var(--accent-active); }
 
@@ -507,6 +538,9 @@ function buildBookDom() {
 
     const gridEl = document.createElement("div");
     gridEl.className = "grid";
+    // Column count comes from the built book, not the stylesheet, so changing
+    // the grid in config/layout.php doesn't silently break the preview.
+    gridEl.style.gridTemplateColumns = `repeat(${grid.cols}, 1fr)`;
     for (let row = 0; row < grid.rows; row++) {
       for (let col = 0; col < grid.cols; col++) {
         const i = linearIndex(grid, page, row, col);
