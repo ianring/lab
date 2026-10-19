@@ -13,6 +13,26 @@ use Puzzlebook\Rng;
 use Puzzlebook\WordTags;
 
 /**
+ * NOT IN THE CHAIN. Removed because it didn't earn its place: at J-in-second-
+ * position it has 41 candidate words in a 133,000-word list, of which ~29
+ * survive the earlier rules, so it removed about 24 cells out of 12,000 --
+ * a paragraph of instructions and a page-turn for almost no progress.
+ *
+ * It also sat awkwardly with the book's two reading conventions at once: the
+ * trigger must still be standing (so you can read its letters), AND the step
+ * works from a snapshot (so you find all the triggers before crossing any
+ * out). Each is reasonable alone; together they read as "go back and find
+ * the words you've already crossed out", which is precisely the confusion
+ * the conventions exist to prevent.
+ *
+ * The cross-page MECHANISM is still interesting and the code is sound, so
+ * it's kept. If it comes back, give it enough supply to be worth the
+ * instructions -- letters ['j','q','x','z'] has 1,618 candidates, position 1
+ * with J has 1,027 -- and re-read the two conventions against the wording
+ * before committing to it.
+ *
+ * ---
+ *
  * Find every word with one of $letters at position $position (1-indexed),
  * and cross out the word sitting at the SAME row and column $pageOffset
  * pages later. With $removeTrigger on, the triggering word goes too.
@@ -43,14 +63,15 @@ use Puzzlebook\WordTags;
  * and constructible. Set it false only if you've checked there are enough
  * words in that intersection.
  */
-final class SameCellNextPageRule implements RuleInterface, ConstructsCells
+/** No card yet -- subclass with real letters/position/pageOffset/removeTrigger values to add one. */
+abstract class SameCellNextPageRule implements RuleInterface, ConstructsCells
 {
     /** @param string[] $letters */
-    public function __construct(
-        private array $letters = ['j'],
-        private int $position = 2,
-        private int $pageOffset = 1,
-        private bool $removeTrigger = true
+    protected function __construct(
+        private array $letters,
+        private int $position,
+        private int $pageOffset,
+        private bool $removeTrigger
     ) {
     }
 

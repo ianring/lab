@@ -9,6 +9,8 @@ use Puzzlebook\Construction\CellPlan;
 use Puzzlebook\Construction\ConstructionContext;
 use Puzzlebook\ConstructionRetry;
 use Puzzlebook\Grid;
+use Puzzlebook\Rng;
+use Puzzlebook\WordIndexCache;
 use Puzzlebook\WordTags;
 
 /**
@@ -28,10 +30,18 @@ use Puzzlebook\WordTags;
  * mid-pass would let the left word's removal stop the right one from being
  * removed, making the outcome depend on scan order.
  *
- * Positional, so there's no single per-word check to extract: whether a word
- * dies depends entirely on the word beside it. construct() therefore picks
- * genuinely adjacent cell pairs and asks for a left word and then a right
- * word that starts on the letter the left one ended on.
+ * CONSTRUCTION. Picks genuine PAIRS of real words up front -- same fix, same
+ * reasoning as PageSignaturePairRule: a left word whose last letter equals a
+ * right word's first letter, BOTH confirmed to survive the prefix and be
+ * unclaimed, before any cell geometry is decided. An earlier version instead
+ * resolved the right half at FILL time from whatever the left cell turned out
+ * to hold (CellPlan::matchingRightHalf()) -- that trusted the dictionary to
+ * find a partner when it got there rather than proving one exists, and (with
+ * several OTHER pair rules now active at once) that trust turned out to be
+ * exactly where an orphaned half could slip through. Both halves are now
+ * placed as literal words, which also means both get the normal invariant
+ * protection every literal cell gets -- an accidental collision with another
+ * rule's pair now retries instead of silently succeeding.
  */
 final class MatchingNeighbourEndsRule implements RuleInterface, ConstructsCells
 {
@@ -45,17 +55,41 @@ final class MatchingNeighbourEndsRule implements RuleInterface, ConstructsCells
         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'w',
     ];
 
+    /**
+     * A ceiling on how many pairs this rule ever places, scaled to stay
+     * PROPORTIONAL to the book's page count rather than fixed. keep_fraction's
+     * own budget also scales with the book, but faster than this -- it's a
+     * fraction of the whole remaining pool, so it roughly triples from 30 pages
+     * to 100. Each pair is a committed literal with no fallback if its right
+     * neighbour collides, so the odds of AT LEAST ONE colliding rise with the
+     * pair count too -- and more collisions means more expensive local retries
+     * (a full refill, since fillWords() has no checkpoints of its own), which is
+     * what turned a working 30-page build into a 100-page build that didn't
+     * converge in two hours. Scaling the TOTAL count by page count keeps the
+     * collision density -- and so the retry cost -- roughly constant as the book
+     * grows, instead of worsening with it. Anything keep_fraction asks for
+     * beyond this falls through to the leftover-cell absorber, which has
+     * genuine fallback.
+     *
+     * This is NOT a per-page quota -- it only sets how many pairs exist in
+     * total. WHERE they land stays fully random across the whole book:
+     * freeHorizontalPairs() builds its candidate list across every page before
+     * shuffling it once, so consumption order has no notion of "page" at all.
+     * Some pages may get several pairs, others none.
+     */
+    private const MAX_PAIRS_PER_PAGE = 1.2;
+
+    /** @var array<string,string[]>|null first letter => every word starting with it */
+    private ?array $byFirstLetterCache = null;
 
     public function apply(array $words, Grid $grid, array $keep): array
     {
-        $keepBefore = $keep;
-
         for ($page = 0; $page < $grid->pages; $page++) {
             for ($row = 0; $row < $grid->rows; $row++) {
                 for ($col = 0; $col < $grid->cols - 1; $col++) {
                     $left = $grid->linearIndex($page, $row, $col);
                     $right = $grid->linearIndex($page, $row, $col + 1);
-                    if (!$keepBefore[$left] || !$keepBefore[$right]) {
+                    if (!$keep[$left] || !$keep[$right]) {
                         continue;
                     }
                     if (WordTags::lastLetter($words[$left]) === WordTags::firstLetter($words[$right])) {
@@ -72,57 +106,206 @@ final class MatchingNeighbourEndsRule implements RuleInterface, ConstructsCells
     {
         // This rule always takes two cells at a time, so an odd budget can't be met
         // exactly; the builder accounts for that when it works out the pacing.
-        $pairsWanted = intdiv($context->budget(), 2);
+        $maxPairs = (int) round($canvas->grid()->pages * self::MAX_PAIRS_PER_PAGE);
+        $pairsWanted = min(intdiv($context->budget(), 2), $maxPairs);
         if ($pairsWanted <= 0) {
             return;
         }
 
-        $candidates = $canvas->freeHorizontalPairs($context->seed());
-        if (count($candidates) < $pairsWanted) {
+        $byFirstLetter = $this->firstLetterGroups($context);
+        $survives = array_flip($context->survivorsSoFar());
+        $leftCandidates = Rng::shuffle($context->survivorsSoFar(), $context->seed());
+
+        $pairs = [];
+        foreach ($leftCandidates as $left) {
+            if (count($pairs) >= $pairsWanted) {
+                break;
+            }
+            if ($canvas->isWordReserved($left)) {
+                continue;
+            }
+            $joinLetter = WordTags::lastLetter($left);
+            if (!in_array($joinLetter, self::USABLE_JOIN_LETTERS, true)) {
+                continue;
+            }
+            $right = null;
+            foreach ($byFirstLetter[$joinLetter] ?? [] as $candidate) {
+                if ($candidate === $left || !isset($survives[$candidate]) || $canvas->isWordReserved($candidate)) {
+                    continue;
+                }
+                $right = $candidate;
+                break;
+            }
+            if ($right === null) {
+                continue;
+            }
+            $canvas->reserveWord($left);
+            $canvas->reserveWord($right);
+            $pairs[] = [$left, $right];
+        }
+
+        if (count($pairs) < $pairsWanted) {
             throw new ConstructionRetry(
-                "step {$context->stepId()} needs {$pairsWanted} side-by-side pairs of free cells, but only "
-                . count($candidates) . ' are available'
+                "step {$context->stepId()} wanted {$pairsWanted} pairs of words where one ends on the "
+                . 'letter the other starts with, but only ' . count($pairs) . ' are currently available '
+                . '(surviving the rules so far, not already claimed by another pair this attempt)'
             );
         }
 
-        $survivesBefore = $context->spellingRulesBefore();
+        $candidates = $canvas->freeHorizontalPairs($context->seed());
 
-        // Two shared plans for the whole rule, not one per cell -- see CellPlan.
-        //
-        // Left half: its LAST letter becomes the right half's required FIRST letter, so
-        // it has to be a letter plenty of words begin with. Left unconstrained, a left
-        // word ending in q, x or z would demand a right word starting with it, and
-        // there are only a handful of those in the language. At prototype size that's a
-        // rare annoyance; with thousands of pairs it's a guaranteed failure.
-        $leftPlan = new CellPlan(
-            $survivesBefore,
-            static fn (string $word): bool => in_array(WordTags::lastLetter($word), self::USABLE_JOIN_LETTERS, true),
-            'pairleft'
-        );
-
-        // Right half: resolved at fill time, once the left half actually has a word --
-        // the one place a cell's requirement depends on its neighbour rather than on
-        // anything decided up front. It finds that neighbour from its own cell index,
-        // which is what lets every pair share this one plan. It also marks the letter
-        // collision as wanted, so the builder doesn't try to avoid it.
-        $rightPlan = CellPlan::matchingRightHalf($survivesBefore, 'pairright');
-
+        // freeHorizontalPairs() only guarantees the two SLOT cells are free -- it
+        // doesn't know, or check, what's already pinned in the cell just outside
+        // either end. Two of THIS rule's own pairs can land back-to-back in the
+        // same row (its slots are column-aligned 0-1, 2-3, 4-5), or this rule's
+        // pair can land next to an earlier-constructed rule's pair -- either way,
+        // nobody notices until fillWords() tries to place the word and finds an
+        // unplanned match already locked in next door. That used to surface only
+        // at fill time, which (with local retry) means redoing the ENTIRE fill
+        // pass just to retry one pair -- the single most expensive way to recover
+        // from something checkable right here, for free, before any cell is
+        // claimed. Checking literalWord() (not staticFirstLetter()) covers both
+        // this rule's own already-placed pairs and any other rule's: ordinary
+        // filler cells have no literal word yet, so they can't be checked and
+        // correctly don't block anything.
+        $grid = $canvas->grid();
+        $prefix = $context->spellingRulesBefore();
+        $placed = 0;
+        $candidateIndex = 0;
         for ($n = 0; $n < $pairsWanted; $n++) {
-            [$left, $right] = $candidates[$n];
-            $canvas->claimDoomed($left, $context->stepId(), $leftPlan);
-            $canvas->claimDoomed($right, $context->stepId(), $rightPlan);
+            [$wordLeft, $wordRight] = $pairs[$n];
+
+            $left = $right = null;
+            while ($candidateIndex < count($candidates)) {
+                [$candidateLeft, $candidateRight] = $candidates[$candidateIndex];
+                $candidateIndex++;
+                // One generic check covers every cross-cutting constraint ANY
+                // rule has registered (corners, opposing lengths, whatever a
+                // future rule invents) -- this rule knows nothing about any of
+                // them, it just asks. See Canvas::wordSatisfiesInvariants().
+                if (!$canvas->wordSatisfiesInvariants($wordLeft, $candidateLeft)
+                    || !$canvas->wordSatisfiesInvariants($wordRight, $candidateRight)) {
+                    continue;
+                }
+                if (!$this->hasOuterNeighbourCollision($canvas, $grid, $candidateLeft, $candidateRight, $wordLeft, $wordRight)) {
+                    $left = $candidateLeft;
+                    $right = $candidateRight;
+                    break;
+                }
+            }
+            if ($left === null) {
+                break;
+            }
+            $placed++;
+
+            $canvas->claimDoomed(
+                $left,
+                $context->stepId(),
+                CellPlan::literal(
+                    $wordLeft,
+                    $prefix,
+                    'pairleft' . $context->stepId() . '-' . $left,
+                    "step {$context->stepId()}: {$this->describe()} (left word)"
+                )
+            );
+            // The right half WANTS to start on the left half's last letter -- that
+            // collision is deliberate, so it needs allowsLeftMatch => true, same as
+            // CellPlan::matchingRightHalf() always set. CellPlan::literal() always
+            // sets it false, so this one is built directly instead of through that
+            // factory.
+            $canvas->claimDoomed(
+                $right,
+                $context->stepId(),
+                new CellPlan(
+                    $prefix,
+                    static fn (string $candidate): bool => $candidate === $wordRight,
+                    'pairright' . $context->stepId() . '-' . $right,
+                    $wordRight,
+                    $wordRight[0],
+                    null,
+                    true,
+                    false,
+                    "step {$context->stepId()}: {$this->describe()} (right word)"
+                )
+            );
         }
+
+        if ($placed < $pairsWanted) {
+            throw new ConstructionRetry(
+                "step {$context->stepId()} wanted {$pairsWanted} side-by-side pairs of free cells with no "
+                . 'outer-neighbour collision, but only found room for ' . $placed
+            );
+        }
+    }
+
+    /**
+     * True if placing $wordLeft/$wordRight at $left/$right would create an
+     * UNPLANNED matching-ends pair with whatever is already pinned just outside
+     * either end -- the cell before $left, or the cell after $right. Only a cell
+     * that already has a literal word (another rule's pair, or one of this
+     * rule's own earlier pairs this same attempt) can be checked at all; ordinary
+     * filler has no word yet, so it never blocks a placement here -- that risk is
+     * exactly what fillWords()'s own neighbour-avoidance logic already handles
+     * when it gets there.
+     */
+    private function hasOuterNeighbourCollision(
+        Canvas $canvas,
+        Grid $grid,
+        int $left,
+        int $right,
+        string $wordLeft,
+        string $wordRight
+    ): bool {
+        [, , $leftCol] = $grid->coordsOf($left);
+        if ($leftCol > 0) {
+            $outerWord = $canvas->planFor($left - 1)?->literalWord();
+            if ($outerWord !== null && WordTags::lastLetter($outerWord) === $wordLeft[0]) {
+                return true;
+            }
+        }
+        [, , $rightCol] = $grid->coordsOf($right);
+        if ($rightCol < $grid->cols - 1) {
+            $outerWord = $canvas->planFor($right + 1)?->literalWord();
+            if ($outerWord !== null && $outerWord[0] === WordTags::lastLetter($wordRight)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public function constructionPriority(): int
     {
-        // Needs two specific cells side by side, so it chooses before the
-        // take-anything spelling rules but after whatever defines the survivors.
         return 50;
     }
 
     public function describe(): string
     {
         return "side-by-side SURVIVING pairs where the left word ends on the right word's first letter";
+    }
+
+    /**
+     * Every word in the dictionary, grouped by its first letter -- cached once (not
+     * per attempt), the same reasoning as PageSignaturePairRule::signatureGroups().
+     *
+     * @return array<string,string[]>
+     */
+    private function firstLetterGroups(ConstructionContext $context): array
+    {
+        if ($this->byFirstLetterCache !== null) {
+            return $this->byFirstLetterCache;
+        }
+
+        return $this->byFirstLetterCache = WordIndexCache::remember(
+            self::class,
+            $this->describe(),
+            $context->wordPoolHash(),
+            static function () use ($context): array {
+                $groups = [];
+                foreach ($context->wordPool() as $word) {
+                    $groups[WordTags::firstLetter($word)][] = $word;
+                }
+                return $groups;
+            }
+        );
     }
 }

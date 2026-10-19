@@ -1,0 +1,814 @@
+<meta charset="utf-8">
+<!-- The charset has to come first, and has to be here at all: this page uses
+     real characters (checkmarks, dashes, a dragon) and without a declaration a
+     browser falls back to a legacy 8-bit encoding and renders the UTF-8 bytes
+     as mojibake -- the classic "âœ“" for "✓". -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dragon Hunt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --paper: #eef0e8;
+    --paper-raised: #f8f9f3;
+    --ink: #1d2119;
+    --ink-soft: #565f52;
+    --rule-line: #c9cdbd;
+    --rule-line-soft: #dcdfd2;
+    --accent-mark: #f0d62e;
+    --accent-mark-ink: #3a3310;
+    --accent-strike: #a73a2c;
+    --accent-strike-soft: #c98d82;
+    --accent-active: #2e6f5c;
+    --accent-active-ink: #f4f7f2;
+    --shadow: rgba(30, 36, 26, 0.12);
+
+    /* The simulated sheet. These are deliberately NOT themed: the point is to
+       show what comes off a printer, and paper is white under any theme. The
+       surrounding app chrome still follows the theme, which gives the same
+       dark-app / light-document split a print preview normally has. */
+    --desk: #d9dad5;
+    --sheet: #f6f0df;        /* aged paperback stock, not white */
+    --sheet-edge: #e2d9c2;   /* the slightly darker cut edge of the block */
+    --sheet-ink: #15120c;    /* warm near-black, the way ink sits on cream */
+    --sheet-faint: #9c9075;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #14170f;
+      --paper-raised: #1b1f15;
+      --ink: #e7e9df;
+      --ink-soft: #a2a897;
+      --rule-line: #343b2a;
+      --rule-line-soft: #272c1e;
+      --accent-mark: #e2c832;
+      --accent-mark-ink: #262108;
+      --accent-strike: #e07a66;
+      --accent-strike-soft: #6e3a30;
+      --accent-active: #5cab8d;
+      --accent-active-ink: #0c1711;
+      --shadow: rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #14170f;
+    --paper-raised: #1b1f15;
+    --ink: #e7e9df;
+    --ink-soft: #a2a897;
+    --rule-line: #343b2a;
+    --rule-line-soft: #272c1e;
+    --accent-mark: #e2c832;
+    --accent-mark-ink: #262108;
+    --accent-strike: #e07a66;
+    --accent-strike-soft: #6e3a30;
+    --accent-active: #5cab8d;
+    --accent-active-ink: #0c1711;
+    --shadow: rgba(0, 0, 0, 0.4);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; margin: 0; }
+
+  code {
+    font-family: "IBM Plex Mono", monospace;
+    background: var(--rule-line-soft);
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+  }
+  button:focus-visible, a:focus-visible {
+    outline: 2px solid var(--accent-active);
+    outline-offset: 2px;
+  }
+
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+  /* ---------- header ---------- */
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    padding: 0.85rem 1.5rem;
+    background: var(--paper-raised);
+    border-bottom: 1px solid var(--rule-line);
+    box-shadow: 0 2px 10px var(--shadow);
+  }
+
+  .brand { display: flex; align-items: center; gap: 0.7rem; margin-right: auto; }
+  .brand-mark { font-size: 1.8rem; line-height: 1; }
+  .brand-text h1 { font-size: 1.3rem; font-weight: 600; letter-spacing: 0.01em; }
+  .brand-text .subtitle {
+    margin: 0.1rem 0 0;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+  }
+
+  .progress-summary { display: flex; gap: 1.6rem; }
+  .stat { display: flex; flex-direction: column; align-items: center; min-width: 4.2rem; }
+  .stat-value {
+    font-family: "IBM Plex Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+  .stat-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--ink-soft);
+  }
+
+  .actions { display: flex; gap: 0.5rem; }
+  .btn {
+    border: 1px solid var(--rule-line);
+    background: transparent;
+    color: var(--ink);
+    padding: 0.45rem 0.85rem;
+    border-radius: 7px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .btn:hover { border-color: var(--ink-soft); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary {
+    background: var(--accent-active);
+    border-color: var(--accent-active);
+    color: var(--accent-active-ink);
+  }
+  .btn-primary:hover { filter: brightness(1.07); }
+  .btn-primary:disabled { background: var(--rule-line); border-color: var(--rule-line); color: var(--ink-soft); }
+
+  /* ---------- layout ---------- */
+
+  .layout { display: flex; align-items: flex-start; flex: 1; min-height: 0; }
+
+  .rail {
+    width: 380px;
+    flex: 0 0 auto;
+    padding: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    max-height: calc(100vh - 68px);
+    overflow-y: auto;
+    position: sticky;
+    top: 68px;
+    border-right: 1px solid var(--rule-line);
+  }
+
+  /* The "desk" the sheets sit on. Light grey so white paper reads as paper
+     rather than as the background. */
+  .book {
+    flex: 1 1 0%;
+    min-width: 0;
+    padding: 2rem 1.8rem 4rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    background: var(--desk);
+    overflow-x: auto;
+  }
+
+  @media (max-width: 900px) {
+    .layout { flex-direction: column; }
+    .rail {
+      width: 100%;
+      position: static;
+      max-height: none;
+      border-right: none;
+      border-bottom: 1px solid var(--rule-line);
+    }
+    .book { padding: 1.2rem 0.8rem 3rem; }
+  }
+
+  /* ---------- stage cards ---------- */
+
+  .card {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule-line);
+    border-left: 4px solid var(--rule-line);
+    border-radius: 10px;
+    padding: 0.9rem 1rem 1rem;
+  }
+  .card.is-current { border-left-color: var(--accent-active); box-shadow: 0 2px 12px var(--shadow); }
+  .card.is-done { border-left-color: var(--accent-strike); }
+  .card.is-upcoming { opacity: 0.6; }
+
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.45rem;
+  }
+  .card-head h2 { font-size: 1rem; font-weight: 600; }
+  .badge {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid var(--rule-line);
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .badge.printed { color: var(--accent-active); border-color: var(--accent-active); }
+  .badge.final { color: var(--accent-strike); border-color: var(--accent-strike); }
+
+  .rule-text { font-size: 0.88rem; line-height: 1.45; margin: 0 0 0.5rem; }
+
+  .pattern-text {
+    font-size: 0.78rem;
+    line-height: 1.4;
+    color: var(--ink-soft);
+    margin: 0 0 0.6rem;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--rule-line-soft);
+  }
+  .pattern-text strong { color: var(--ink); font-weight: 600; }
+
+  .stage-stats {
+    font-family: "IBM Plex Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+    margin: 0 0 0.5rem;
+    line-height: 1.6;
+  }
+  .stage-stats b { color: var(--ink); }
+
+  .reveal-result {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.86rem;
+    margin: 0 0 0.6rem;
+  }
+  .reveal-code {
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    background: var(--accent-mark);
+    color: var(--accent-mark-ink);
+    padding: 0.1rem 0.45rem;
+    border-radius: 5px;
+  }
+  .reveal-ok { color: var(--accent-active); font-size: 0.78rem; }
+  .reveal-bad { color: var(--accent-strike); font-size: 0.78rem; font-weight: 600; }
+
+  .final-banner {
+    font-size: 0.86rem;
+    padding: 0.55rem 0.7rem;
+    border-radius: 7px;
+    margin-top: 0.3rem;
+  }
+  .final-banner.ok { background: color-mix(in srgb, var(--accent-active) 18%, transparent); border: 1px solid var(--accent-active); }
+  .final-banner.bad { background: color-mix(in srgb, var(--accent-strike) 20%, transparent); border: 1px solid var(--accent-strike); }
+
+  .card-foot { display: flex; justify-content: flex-end; }
+
+  /* ---------- book pages ---------- */
+
+  /* A mass-market paperback page: 4.25 x 6.87 inches. Fixed size, nothing
+     computed -- at 8rem to the inch that's 34rem x 55rem, with a 3rem pad
+     for the 3/8" margin a book that size can afford. */
+  .page {
+    width: 34rem;
+    height: 55rem;
+    flex: 0 0 auto;
+    padding: 3rem;
+    background: var(--sheet);
+    color: var(--sheet-ink);
+    border: 1px solid var(--sheet-edge);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), 0 8px 24px rgba(0, 0, 0, 0.17);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .page-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.6rem;
+    flex: 0 0 auto;
+  }
+  .page-head h3 {
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--sheet-faint);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  /* Fills the rest of the sheet, so 20 rows land inside the bottom margin. */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);   /* replaced from the book's data */
+    grid-auto-rows: 1fr;
+    flex: 1 1 auto;
+    min-height: 0;
+    column-gap: 0.25rem;
+  }
+
+  .cell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "IBM Plex Mono", monospace;
+    /* 0.72rem is as large as 6 columns of up to 10 letters will go on a page
+       this narrow -- about 6.5pt in print, which is very small. See the note
+       in the README about trim size versus column count. */
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    text-align: center;
+    color: var(--sheet-ink);
+    line-height: 1.1;
+    overflow: hidden;
+  }
+
+  /* Position numbers are a proofing aid, not part of the printed book, so they
+     stay hidden -- the preview should look like the page a reader gets.
+     Switch display back to block to get them for cross-checking against
+     build/pages.txt, which lists the same numbers. */
+  .cell .idx {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    font-size: 0.55rem;
+    color: var(--sheet-faint);
+    opacity: 0.75;
+  }
+
+  /* A crossed-out word stays readable here on purpose -- the preview is for
+     proofing, so you need to see WHAT was removed, not just that something was. */
+  /* Black word, black rule -- a printed book marked up in pen, not a diff view.
+     text-decoration-color is left to default to currentColor, so the strike can
+     never drift away from the ink colour. */
+  .cell.struck {
+    text-decoration: line-through;
+    text-decoration-thickness: 1.5px;
+  }
+
+  /* Reads as a highlighter stroke on the paper rather than a filled table cell. */
+  .cell.revealed {
+    background: var(--accent-mark);
+    color: var(--sheet-ink);
+    box-shadow: 0 0 0 2px var(--accent-mark);
+  }
+  .cell.revealed .idx { color: var(--sheet-ink); opacity: 0.5; }
+
+  /* Highlighted AND crossed out: black rule over the yellow, same as anywhere else. */
+  .cell.revealed.struck {
+    text-decoration-color: var(--sheet-ink);
+  }
+
+  /* The words THIS step just crossed out, specifically -- distinct from every
+     word struck by an earlier step, which only gets the plain strike above.
+     Cleared the moment another step is applied, so it always shows the most
+     recent action and nothing older. */
+  .cell.just-removed {
+    background: color-mix(in srgb, var(--accent-strike) 22%, transparent);
+    box-shadow: 0 0 0 2px var(--accent-strike);
+  }
+  .cell.just-removed .idx { color: var(--sheet-ink); opacity: 0.6; }
+
+  .cell .order-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--sheet-ink);
+    color: var(--sheet);
+    font-size: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-weight: 600;
+  }
+
+  .cell.answer {
+    box-shadow: 0 0 0 2px var(--accent-active);
+    font-weight: 700;
+  }
+
+  /* Sits on the desk alongside the sheets, so it matches their width and takes
+     its colour from the desk rather than from the themed chrome. */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9rem;
+    font-size: 0.72rem;
+    color: #4a4a4a;
+    width: 34rem;   /* matches the page width */
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .swatch { width: 0.75rem; height: 0.75rem; border-radius: 3px; display: inline-block; }
+  .swatch.struck { background: var(--sheet-ink); }
+  .swatch.just-removed { background: color-mix(in srgb, var(--accent-strike) 22%, transparent); border: 2px solid var(--accent-strike); }
+  .swatch.revealed { background: var(--accent-mark); }
+  .swatch.answer { background: transparent; border: 2px solid var(--accent-active); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">🐉</span>
+      <div class="brand-text">
+        <h1>Dragon Hunt</h1>
+        <p class="subtitle" id="subtitle">Watching the puzzlebook chain solve itself, one step at a time</p>
+      </div>
+    </div>
+    <div class="progress-summary">
+      <div class="stat"><span class="stat-value" id="stat-remaining">—</span><span class="stat-label">words left</span></div>
+      <div class="stat"><span class="stat-value" id="stat-pct">—</span><span class="stat-label">eliminated</span></div>
+      <div class="stat"><span class="stat-value" id="stat-stage">—</span><span class="stat-label">step</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btn-run-all">Run remaining</button>
+      <button class="btn" id="btn-reset">Reset</button>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="rail" id="rail"></aside>
+    <section class="book">
+      <div class="legend">
+        <span><i class="swatch struck"></i> crossed out</span>
+        <span><i class="swatch just-removed"></i> crossed out by THIS step</span>
+        <span><i class="swatch revealed"></i> read for this step's reveal</span>
+        <span><i class="swatch answer"></i> the answer</span>
+      </div>
+      <div id="book"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+"use strict";
+
+/* ===================================================================
+   Data: book.json and chain.json are fetched at load time (see "App
+   state + rendering" below) -- this page carries no copy of the book
+   or the chain itself. Both files are written by bin/build.php
+   straight into web/, so what you see here is the exact book that was
+   built, not a separate re-implementation of the construction logic.
+   =================================================================== */
+
+/* ===================================================================
+   Layout math only -- where a word sits in the page/row/col grid, for
+   rendering. This page does not evaluate any rule or reveal; every
+   "what does the chain do" question is answered by web/api.php, which
+   calls the one real implementation (lib/Engine.php) on the server.
+   =================================================================== */
+
+function linearIndex(grid, page, row, col) {
+  return (page * grid.rows + row) * grid.cols + col;
+}
+
+/* ===================================================================
+   App state + rendering
+   =================================================================== */
+
+let grid, totalWords, words, CHAIN;
+let keep, removedAtStep, stepIndex, applied;
+let loadedBook = null;
+let loadedChain = null;
+
+let busy = false;
+let stepError = null;
+
+function resetState() {
+  grid = loadedBook.grid;
+  words = loadedBook.words;
+  totalWords = grid.pages * grid.rows * grid.cols;
+  CHAIN = loadedChain;
+
+  // Rule wording comes from chain.json, which bin/build.php writes -- so an edit
+  // to config/chain.json isn't visible here until the book is rebuilt. Showing the
+  // build time makes a stale preview obvious rather than mysterious.
+  if (loadedChain.built_at) {
+    const subtitle = document.getElementById("subtitle");
+    if (subtitle) subtitle.textContent = `Built ${loadedChain.built_at} — rebuild to pick up rule edits`;
+  }
+
+  keep = new Array(totalWords).fill(true);
+  removedAtStep = new Array(totalWords).fill(0);
+  stepIndex = 0;
+  applied = [];
+  busy = false;
+  stepError = null;
+}
+
+async function fetchJson(path) {
+  const res = await fetch(path, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`couldn't load ${path} (HTTP ${res.status})`);
+  }
+  return res.json();
+}
+
+const railEl = document.getElementById("rail");
+const bookEl = document.getElementById("book");
+const statRemaining = document.getElementById("stat-remaining");
+const statPct = document.getElementById("stat-pct");
+const statStage = document.getElementById("stat-stage");
+
+let cellEls = [];
+
+function buildBookDom() {
+  bookEl.innerHTML = "";
+  cellEls = new Array(totalWords);
+  for (let page = 0; page < grid.pages; page++) {
+    const pageEl = document.createElement("div");
+    pageEl.className = "page";
+
+    const head = document.createElement("div");
+    head.className = "page-head";
+    head.innerHTML = `<h3>Page ${page + 1}</h3>`;
+    pageEl.appendChild(head);
+
+    const gridEl = document.createElement("div");
+    gridEl.className = "grid";
+    // Column count comes from the built book, not the stylesheet, so changing
+    // the grid in config/layout.json doesn't silently break the preview.
+    gridEl.style.gridTemplateColumns = `repeat(${grid.cols}, 1fr)`;
+    for (let row = 0; row < grid.rows; row++) {
+      for (let col = 0; col < grid.cols; col++) {
+        const i = linearIndex(grid, page, row, col);
+        const cellEl = document.createElement("div");
+        cellEl.className = "cell";
+        cellEl.innerHTML = `<span class="idx">${i + 1}</span>${words[i]}`;
+        gridEl.appendChild(cellEl);
+        cellEls[i] = cellEl;
+      }
+    }
+    pageEl.appendChild(gridEl);
+    bookEl.appendChild(pageEl);
+  }
+}
+
+function clearRevealHighlights() {
+  document.querySelectorAll(".cell.revealed").forEach((el) => {
+    el.classList.remove("revealed");
+    const badge = el.querySelector(".order-badge");
+    if (badge) badge.remove();
+  });
+}
+
+// Only ever marks the MOST RECENT eliminate step's targets -- cleared every time
+// another step (eliminate or reveal) is about to be applied, so it never lingers
+// and shows an earlier step's work by mistake.
+function clearJustRemoved() {
+  document.querySelectorAll(".cell.just-removed").forEach((el) => {
+    el.classList.remove("just-removed");
+  });
+}
+
+function applyRevealHighlights(cells) {
+  cells.forEach((i, order) => {
+    const el = cellEls[i];
+    el.classList.add("revealed");
+    const badge = document.createElement("span");
+    badge.className = "order-badge";
+    badge.textContent = String(order + 1);
+    el.appendChild(badge);
+  });
+}
+
+function applyStrikes(indices, stepId) {
+  indices.forEach((i) => {
+    cellEls[i].classList.add("struck", "just-removed");
+    removedAtStep[i] = stepId;
+    cellEls[i].title = `word ${i + 1} of ${totalWords} -- crossed out at step ${stepId}`;
+  });
+}
+
+function markAnswer(i) {
+  cellEls[i].classList.add("answer");
+  cellEls[i].title = `word ${i + 1} of ${totalWords} -- the answer`;
+}
+
+function fmtPct(n) { return n.toFixed(1) + "%"; }
+
+function updateGlobalStats() {
+  const remaining = keep.reduce((n, k) => n + (k ? 1 : 0), 0);
+  const removedPct = ((totalWords - remaining) / totalWords) * 100;
+  statRemaining.textContent = remaining;
+  statPct.textContent = fmtPct(removedPct);
+  statStage.textContent = stepIndex >= CHAIN.steps.length ? "done" : `${stepIndex + 1} / ${CHAIN.steps.length}`;
+}
+
+function renderRail() {
+  railEl.innerHTML = "";
+  CHAIN.steps.forEach((step, idx) => {
+    const state = idx < stepIndex ? "done" : idx === stepIndex ? "current" : "upcoming";
+    const card = document.createElement("div");
+    card.className = `card is-${state}`;
+
+    let badgeText, badgeClass;
+    if (step.kind === "reveal") {
+      badgeText = "reveal";
+      badgeClass = "";
+    } else if (step.final) {
+      badgeText = "final";
+      badgeClass = "final";
+    } else if (step.printed) {
+      badgeText = "printed";
+      badgeClass = "printed";
+    } else {
+      badgeText = "hidden";
+      badgeClass = "";
+    }
+
+    let html = `
+      <div class="card-head">
+        <h2>Step ${step.id}</h2>
+        <span class="badge ${badgeClass}">${badgeText}</span>
+      </div>
+    `;
+
+    html += step.kind === "eliminate"
+      ? `<p class="rule-text">${step.rule_text}</p>`
+      : `<p class="pattern-text">Reads <strong>${step.pattern_text}</strong>.</p>`;
+
+    const record = applied[idx];
+    if (record) {
+      if (step.kind === "eliminate") {
+        html += `
+          <p class="stage-stats">
+            removed <b>${record.removed.length}</b> of ${record.total} words
+            (${fmtPct(record.pct_book)} of the whole book, ${fmtPct(record.pct_remaining)} of what remained)<br>
+            <b>${record.after}</b> word${record.after === 1 ? "" : "s"} left
+          </p>
+        `;
+        if (record.final) {
+          const ok = record.final.ok;
+          html += `
+            <div class="final-banner ${ok ? "ok" : "bad"}">
+              ${ok
+                ? `✓ Exactly one word survived: <strong>${record.final.expected_answer.toUpperCase()}</strong> -- matches config/chain.json.`
+                : `✗ Expected exactly one survivor ('${record.final.expected_answer}'), got `
+                  + `${record.final.survivor_words.length}: ${record.final.survivor_words.join(", ")}.`}
+            </div>
+          `;
+        }
+      } else if (record.error) {
+        html += `<p class="reveal-bad">reveal failed: ${record.error}</p>`;
+      } else {
+        html += `
+          <p class="reveal-result">
+            <span class="reveal-code">${record.text.toUpperCase()}</span>
+            <span class="${record.matches_expected ? "reveal-ok" : "reveal-bad"}">${
+              record.matches_expected ? "matches expected ✓" : `expected '${record.expected}'`
+            }</span>
+          </p>
+        `;
+      }
+    }
+
+    if (state === "current" && stepError) {
+      html += `<p class="reveal-bad">${stepError}</p>`;
+    }
+
+    card.innerHTML = html;
+
+    if (state === "current") {
+      const foot = document.createElement("div");
+      foot.className = "card-foot";
+      const btn = document.createElement("button");
+      btn.className = "btn btn-primary";
+      btn.disabled = busy;
+      btn.textContent = busy
+        ? "Working…"
+        : (step.kind === "reveal" ? `Reveal step ${step.id}` : `Apply step ${step.id}`);
+      btn.addEventListener("click", () => applyOneStep());
+      foot.appendChild(btn);
+      card.appendChild(foot);
+    }
+
+    railEl.appendChild(card);
+  });
+}
+
+async function applyOneStep() {
+  if (!CHAIN || stepIndex >= CHAIN.steps.length || busy) return;
+
+  busy = true;
+  stepError = null;
+  renderRail();
+
+  try {
+    const res = await fetch("api.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ step_index: stepIndex, keep }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data && data.error ? data.error : `HTTP ${res.status}`);
+    }
+
+    clearRevealHighlights();
+    clearJustRemoved();
+
+    if (data.kind === "eliminate") {
+      keep = data.keep;
+      applyStrikes(data.removed, CHAIN.steps[stepIndex].id);
+      if (data.final && data.final.ok) {
+        markAnswer(data.final.survivor_indices[0]);
+      }
+    } else if (!data.error) {
+      applyRevealHighlights(data.cells);
+    }
+
+    applied[stepIndex] = data;
+    stepIndex++;
+    updateGlobalStats();
+  } catch (err) {
+    stepError = `Couldn't reach the server: ${String((err && err.message) || err)}`;
+  } finally {
+    busy = false;
+    renderRail();
+  }
+}
+
+async function runAllRemaining() {
+  if (!CHAIN) return;
+  while (stepIndex < CHAIN.steps.length && !stepError) {
+    await applyOneStep();
+  }
+}
+
+function fullReset() {
+  if (!loadedBook || !loadedChain) return;
+  resetState();
+  buildBookDom();
+  updateGlobalStats();
+  renderRail();
+}
+
+function showLoadError(err) {
+  railEl.innerHTML = `
+    <div class="card is-current">
+      <div class="card-head"><h2>Couldn't load the book</h2></div>
+      <p class="rule-text">${String((err && err.message) || err)}</p>
+      <p class="pattern-text">Run <code>php bin/build.php</code> on your server first -- it writes
+      <code>book.json</code> and <code>chain.json</code> straight into this <code>web/</code> folder.
+      Then reload this page from the same place those two files ended up.</p>
+    </div>
+  `;
+  bookEl.innerHTML = "";
+  statRemaining.textContent = "—";
+  statPct.textContent = "—";
+  statStage.textContent = "—";
+}
+
+async function boot() {
+  try {
+    const [book, chain] = await Promise.all([fetchJson("book.json"), fetchJson("chain.json")]);
+    loadedBook = book;
+    loadedChain = chain;
+    fullReset();
+  } catch (err) {
+    showLoadError(err);
+  }
+}
+
+document.getElementById("btn-run-all").addEventListener("click", runAllRemaining);
+document.getElementById("btn-reset").addEventListener("click", fullReset);
+
+boot();
+</script>

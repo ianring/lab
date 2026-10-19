@@ -15,16 +15,76 @@ require __DIR__ . '/../lib/bootstrap.php';
 use Puzzlebook\ChainBuilder;
 use Puzzlebook\Engine;
 use Puzzlebook\Grid;
+use Puzzlebook\JsonConfig;
 use Puzzlebook\Solver;
 
 $root = dirname(__DIR__);
 
+// Loaded early (not just after build() returns, as before) so the local-retry
+// heartbeat below can name which RULE a step id belongs to, not just its number.
+$chain = JsonConfig::load($root . '/config/chain.json');
+$chain = \Puzzlebook\ChainPlan::numberSteps($chain);
+$ruleTypeByStepId = [];
+foreach ($chain['steps'] as $step) {
+    $ruleTypeByStepId[$step['id']] = $step['rule']['type'] ?? '?';
+}
+
+// Nothing else below prints anything until build() returns or gives up, and a single
+// attempt that fails late -- after filling thousands of cells -- can take real time on
+// its own. Without a heartbeat, a slow run and a HUNG one are indistinguishable from
+// the terminal, AND the retry-reason tally this script's own catch block prints below
+// only exists once every attempt has already failed -- which is itself a long wait at
+// 20,000 possible attempts. Printing it live, every few seconds, means seeing WHY
+// attempts are failing within seconds of starting, not only after the whole run gives
+// up (or never, if it succeeds -- in which case there's nothing to diagnose anyway).
+$buildStartedAt = microtime(true);
+$lastHeartbeatAt = $buildStartedAt;
+$lastFillHeartbeatAt = $buildStartedAt;
 $built = ChainBuilder::build(
-    $root . '/config/layout.php',
-    $root . '/config/chain.php',
-    $root . '/data/wordlist.txt'
+    $root . '/config/layout.json',
+    $root . '/config/chain.json',
+    $root . '/data/wordlist.txt',
+    static function (int $attempt, array $retryReasons) use (&$lastHeartbeatAt, $buildStartedAt): void {
+        $now = microtime(true);
+        if ($now - $lastHeartbeatAt < 5.0) {
+            return;
+        }
+        fwrite(STDERR, sprintf("  ...attempt %d, %.0fs elapsed\n", $attempt + 1, $now - $buildStartedAt));
+        if ($retryReasons !== []) {
+            arsort($retryReasons);
+            foreach (array_slice($retryReasons, 0, 3, true) as $reason => $n) {
+                fwrite(STDERR, "        {$n}x  {$reason}\n");
+            }
+        }
+        $lastHeartbeatAt = $now;
+    },
+    // Covers what the heartbeat above can't: a SINGLE attempt that's slow rather than
+    // stuck, which otherwise prints nothing at all until it either succeeds or throws.
+    static function (int $filled, int $total) use (&$lastFillHeartbeatAt, $buildStartedAt): void {
+        $now = microtime(true);
+        if ($now - $lastFillHeartbeatAt < 5.0) {
+            return;
+        }
+        $pct = $total > 0 ? (int) round($filled / $total * 100) : 100;
+        fwrite(STDERR, sprintf(
+            "      ...filling cell %d/%d (%d%%), %.0fs elapsed\n",
+            $filled,
+            $total,
+            $pct,
+            $now - $buildStartedAt
+        ));
+        $lastFillHeartbeatAt = $now;
+    },
+    // Fires on EVERY local retry, not throttled -- these are rare enough (a few
+    // per attempt at most, by design, or MAX_LOCAL_ATTEMPTS gives up) that a
+    // heartbeat-style 5-second throttle would hide most of them rather than
+    // declutter anything.
+    static function (int $fromIndex, ?int $fromStepId, int $toIndex, ?int $toStepId, string $reason) use ($ruleTypeByStepId): void {
+        $fromLabel = $fromStepId !== null ? "step {$fromStepId} [{$ruleTypeByStepId[$fromStepId]}]" : 'an unattributed step';
+        $toLabel = $toStepId !== null ? "step {$toStepId} [{$ruleTypeByStepId[$toStepId]}]" : 'the very start of construction';
+        fwrite(STDERR, "    ~ local retry: {$fromLabel} failed ({$reason}) -- backtracking to {$toLabel}\n");
+    }
 );
-$chain = require $root . '/config/chain.php';
 
 // How many arrangements the builder had to try is useful to see (a number much
 // above 1 means the constraints are tight and small rule changes may stop
@@ -50,6 +110,12 @@ foreach ($chainForExport['steps'] as &$step) {
 unset($step);
 
 $bookJson = json_encode($book, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+// Stamped so the preview can show when it was built. Rule wording lives in this
+// file, which the browser reads instead of config/chain.json -- so editing a
+// rule_text and reloading the preview shows the OLD text until a rebuild. Having
+// the date on screen makes that obvious instead of baffling.
+$chainForExport['built_at'] = date('D j M Y, H:i');
+
 $chainJson = json_encode($chainForExport, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
 
 $jsonPath = $root . '/build/book.json';
@@ -86,6 +152,38 @@ echo "Copied book.json and chain.json into web/ for the preview page to fetch\n\
 // through Solver here just prints the same walk stage by stage, since that's
 // the only place this report is written.
 $result = Solver::run($book, $chain);
+
+// The words each step actually removes from THIS real, built book -- not the
+// theoretical count bin/check.php works from before any word is chosen. Lets you
+// see, concretely, a step that's doing disproportionately much of the work, and
+// look for other rules whose catch turns out to be a SUBSET of it -- the same
+// kind of resource collision the vowel_fraction/knight's-move incident turned out
+// to be, just checked here against what actually got built instead of in theory.
+$eliminatedDir = $root . '/build/eliminated';
+if (!is_dir($eliminatedDir)) {
+    mkdir($eliminatedDir, 0777, true);
+}
+
+$stepById = [];
+foreach ($chain['steps'] as $step) {
+    $stepById[$step['id']] = $step;
+}
+
+foreach ($result['eliminated'] as $stepId => $removedWords) {
+    $description = Engine::ruleFromConfig($stepById[$stepId]['rule'])->describe();
+    $slug = strtolower(preg_replace('/[^a-z0-9]+/i', '-', $description));
+    $slug = trim($slug, '-');
+    $slug = substr($slug, 0, 40);
+    sort($removedWords);
+    $stepFile = $eliminatedDir . '/step-' . str_pad((string) $stepId, 2, '0', STR_PAD_LEFT) . "-{$slug}.txt";
+    file_put_contents($stepFile, implode("\n", $removedWords) . "\n");
+}
+
+file_put_contents($eliminatedDir . '/summary.txt', implode("\n", $result['lines']) . "\n");
+
+echo "Wrote {$eliminatedDir}/ -- one file per step listing the words it actually\n";
+echo "removed from this book, plus summary.txt with the counts printed below.\n\n";
+
 foreach ($result['lines'] as $line) {
     echo $line . "\n";
 }

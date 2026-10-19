@@ -9,13 +9,15 @@ use Puzzlebook\WordTags;
 /**
  * Cross out every word containing $needle anywhere in it.
  *
- * Covers both "words with a double E" (needle "ee") and "words with a Z"
- * (needle "z") -- a single letter is just a one-character substring, so the
- * same rule does both and the printed instruction is what differs.
+ * Shared base for a family of cards -- a single letter is just a
+ * one-character substring, so the same check covers "words with a Z"
+ * (ContainsZRule) and "words with a double E" (ContainsDoubleERule), with
+ * only the printed instruction differing. A new substring is a new concrete
+ * subclass, not a new parameter: see ContainsZRule for the shape.
  */
-final class ContainsSubstringRule extends SpellingRule
+abstract class ContainsSubstringRule extends SpellingRule
 {
-    public function __construct(private string $needle)
+    protected function __construct(private string $needle)
     {
     }
 

@@ -14,9 +14,10 @@ use Puzzlebook\WordTags;
  * shape still standing are the "key" words the knight's-move rule launched
  * from, so clearing them leaves the answer alone.
  */
-final class LengthAndEndingRule extends SpellingRule
+/** No card yet -- subclass with a real length/ending combination to add one. */
+abstract class LengthAndEndingRule extends SpellingRule
 {
-    public function __construct(private int $length, private string $ending)
+    protected function __construct(private int $length, private string $ending)
     {
     }
 

@@ -51,6 +51,12 @@ final class Canvas
     /** @var FillInvariant[] conditions spanning many cells, enforced while words are chosen */
     private array $invariants = [];
 
+    /** @var array<string,bool> specific words already spoken for during CONSTRUCTION */
+    private array $reservedWords = [];
+
+    /** @var array<int,bool> cells exempt from every OTHER rule's fill-time invariant */
+    private array $invariantExempt = [];
+
     public function __construct(Grid $grid)
     {
         $this->grid = $grid;
@@ -67,6 +73,55 @@ final class Canvas
     public function size(): int
     {
         return $this->size;
+    }
+
+    /**
+     * A point-in-time copy of every mutable thing a rule's construct() can
+     * change, for ChainBuilder's local-retry loop: snapshot before a
+     * construction step, restore to it if that step (or anything after it,
+     * up to and including filling and verifying) fails in a way blamed on
+     * that step.
+     *
+     * Every property except $invariants is a plain value array -- PHP
+     * copies those on write, not on read, so capturing them here is cheap
+     * and restoring them later can't be corrupted by anything that mutated
+     * the ORIGINAL array in between. $invariants holds objects
+     * (UniquePageSignature and friends), which PHP arrays hold by
+     * reference, not by value -- so each one is cloned. Their only mutable
+     * state is itself plain arrays ($seen, $byPage), which PHP's default
+     * shallow clone copies correctly; nothing here needs a custom
+     * __clone(). Without this, restoring $invariants to an "earlier" array
+     * would still hand back objects carrying bookkeeping from the fill
+     * attempt that just got abandoned -- recording matches against words
+     * that are about to be un-placed.
+     *
+     * @return array<string,mixed>
+     */
+    public function snapshot(): array
+    {
+        return [
+            'plans' => $this->plans,
+            'killedBy' => $this->killedBy,
+            'survivors' => $this->survivors,
+            'survivorForbidden' => $this->survivorForbidden,
+            'replaceable' => $this->replaceable,
+            'invariants' => array_map(static fn (FillInvariant $i): FillInvariant => clone $i, $this->invariants),
+            'reservedWords' => $this->reservedWords,
+            'invariantExempt' => $this->invariantExempt,
+        ];
+    }
+
+    /** @param array<string,mixed> $snapshot from a prior call to snapshot() */
+    public function restore(array $snapshot): void
+    {
+        $this->plans = $snapshot['plans'];
+        $this->killedBy = $snapshot['killedBy'];
+        $this->survivors = $snapshot['survivors'];
+        $this->survivorForbidden = $snapshot['survivorForbidden'];
+        $this->replaceable = $snapshot['replaceable'];
+        $this->invariants = $snapshot['invariants'];
+        $this->reservedWords = $snapshot['reservedWords'];
+        $this->invariantExempt = $snapshot['invariantExempt'];
     }
 
     /** True if nothing has claimed this cell yet. */
@@ -112,6 +167,30 @@ final class Canvas
                     $right = $this->grid->linearIndex($page, $row, $col + 1);
                     if ($this->plans[$left] === null && $this->plans[$right] === null) {
                         $pairs[] = [$left, $right];
+                    }
+                }
+            }
+        }
+        return Rng::shuffle($pairs, $seed);
+    }
+
+    /**
+     * Vertically adjacent cell pairs where BOTH halves are still free -- the same
+     * idea as freeHorizontalPairs(), one column down instead of one row across.
+     * Only non-overlapping pairs are offered (rows 0-1, 2-3, ... of a column).
+     *
+     * @return array<array{0:int,1:int}>
+     */
+    public function freeVerticalPairs(int $seed): array
+    {
+        $pairs = [];
+        for ($page = 0; $page < $this->grid->pages; $page++) {
+            for ($col = 0; $col < $this->grid->cols; $col++) {
+                for ($row = 0; $row + 1 < $this->grid->rows; $row += 2) {
+                    $top = $this->grid->linearIndex($page, $row, $col);
+                    $bottom = $this->grid->linearIndex($page, $row + 1, $col);
+                    if ($this->plans[$top] === null && $this->plans[$bottom] === null) {
+                        $pairs[] = [$top, $bottom];
                     }
                 }
             }
@@ -194,6 +273,77 @@ final class Canvas
         return isset($this->replaceable[$cell]);
     }
 
+    // --------------------------------------------------------- construction-time words
+
+    /**
+     * Claim a SPECIFIC word during construction, before any filler is chosen --
+     * for a rule that picks genuine word PAIRS up front (two anagrams, a word
+     * hiding inside another) rather than a shape to be satisfied later. Without
+     * this, two different pair rules scanning the dictionary independently in the
+     * same attempt could both choose the same word for their own pair, and
+     * whichever one filled its cell second would find the word already placed
+     * somewhere else in the book.
+     *
+     * Throws ConstructionRetry rather than failing outright: a genuine collision
+     * between two rules' picks is rare and specific to this attempt's random
+     * choices, not a fact about the dictionary -- a different seed picks
+     * different words.
+     */
+    public function reserveWord(string $word): void
+    {
+        if (isset($this->reservedWords[$word])) {
+            throw new ConstructionRetry(
+                "'{$word}' was already claimed by another rule's pair earlier in this attempt"
+            );
+        }
+        $this->reservedWords[$word] = true;
+    }
+
+    public function isWordReserved(string $word): bool
+    {
+        return isset($this->reservedWords[$word]);
+    }
+
+    /**
+     * Every word claimed during construction -- handed to Dictionary::reserveAll()
+     * before any ordinary filler is chosen, alongside the answer and the revealed
+     * words, so nothing else in the book can pick the same word twice.
+     *
+     * @return string[]
+     */
+    public function reservedWords(): array
+    {
+        return array_keys($this->reservedWords);
+    }
+
+    /**
+     * Marks a cell whose word was chosen deliberately, during construction, by a
+     * rule that validated it for ITS OWN purpose already (see reserveWord()) --
+     * exempt from every OTHER rule's fill-time invariant, not just its own.
+     *
+     * Why this needs to be separate from a rule's own invariant exemption (the
+     * $exempt a PageSignaturePairRule/ContainedWordOnPageRule passes to its OWN
+     * UniquePageSignature/NoContainmentOnPage): a predetermined word has no
+     * fallback if some invariant rejects it -- unlike ordinary filler, it can't
+     * try a different candidate -- so subjecting it to an invariant that belongs
+     * to a DIFFERENT rule can only waste an attempt, never usefully validate
+     * anything. Sometimes this is even unfixable by retrying at all: a reversal
+     * pair is unavoidably also an anagram pair (reversing a word can't change
+     * which letters it contains), so one rule's own exemption list was never
+     * going to be enough on its own. The answer's cell deliberately does NOT get
+     * this treatment: its cell is randomised every attempt, so a collision there
+     * really is attempt-dependent, worth retrying rather than blanket-exempting.
+     */
+    public function exemptFromInvariants(int $cell): void
+    {
+        $this->invariantExempt[$cell] = true;
+    }
+
+    public function isExemptFromInvariants(int $cell): bool
+    {
+        return isset($this->invariantExempt[$cell]);
+    }
+
     /**
      * Swap in a different plan for a cell that's already claimed, keeping its
      * survivor status and which step kills it. Used to drop the revealed words into
@@ -213,6 +363,49 @@ final class Canvas
     }
 
     /**
+     * True if $cell has a king's-move neighbour, other than $excludeCell,
+     * ALREADY COMMITTED to a word of exactly $length letters -- either an
+     * existing literal of that length, or an ordinary cell whose plan fixes
+     * its length (CellPlan::fixedLength()) to it, like LongShortNeighbourRule's
+     * own cells. Checking fixedLength() too matters: a cell committed to
+     * "must be exactly 3 letters" is just as rigid as a literal for this
+     * purpose, even though its actual word isn't chosen until fillWords() --
+     * a 9-letter literal placed next to it later would make EVERY 3-letter
+     * candidate fail there, not occasionally but always, since the
+     * constraint is positional, not about any specific word's spelling.
+     *
+     * Checked LIVE at the moment of placement rather than from a one-time
+     * snapshot -- which matters because any of this book's literal-placing
+     * rules (AnagramPairOnPageRule, SameEndingVerticalPairRule,
+     * MatchingNeighbourEndsRule, LongShortNeighbourRule) can place a
+     * pair-half before another one ever runs, so a snapshot taken only at
+     * one rule's own construct() time can't see what a DIFFERENT rule does
+     * either before or after it. Checking live, every time any of them is
+     * about to claim a cell for a word of length 9 or 3, closes that gap
+     * regardless of which rule runs first: whichever placement happens
+     * SECOND is always the one checking, and finds the first one already
+     * there -- whether that first one is a literal or just a committed shape.
+     */
+    public function hasAdjacentLiteralOfLength(int $cell, int $length, ?int $excludeCell = null): bool
+    {
+        foreach ($this->grid->surroundingNeighbours($cell) as $neighbour) {
+            if ($neighbour === $excludeCell) {
+                continue;
+            }
+            $plan = $this->plans[$neighbour];
+            if ($plan === null) {
+                continue;
+            }
+            $word = $plan->literalWord();
+            $committedLength = $word !== null ? strlen($word) : $plan->fixedLength();
+            if ($committedLength === $length) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Register a condition spanning many cells, for a rule that fires on coincidences
      * between words rather than on any one word's own letters. See FillInvariant.
      */
@@ -225,6 +418,36 @@ final class Canvas
     public function invariants(): array
     {
         return $this->invariants;
+    }
+
+    /**
+     * True if $word may be committed as a LITERAL at $cell without breaking any
+     * invariant registered SO FAR -- the single, generic check every literal-
+     * placing rule (AnagramPairOnPageRule, SameEndingVerticalPairRule,
+     * MatchingNeighbourEndsRule, LongShortNeighbourRule, ...) should call before
+     * committing a no-fallback word, instead of each one hand-writing its own
+     * knowledge of what some OTHER specific rule cares about (corners, lengths,
+     * or whatever a future rule invents). A rule that owns a cross-cutting
+     * constraint expresses it ONCE, as a FillInvariant on its own construct();
+     * everyone else just asks this, without knowing or caring what any
+     * invariant is actually about.
+     *
+     * Only catches constraints registered BEFORE this call -- which is why
+     * rules that own one (CornerContainsLetterRule, LongShortNeighbourRule)
+     * use a low constructionPriority(), running before the letter-matching
+     * pair rules so their invariant already exists by the time those rules
+     * place anything. $placed is passed as [] since no invariant currently
+     * placed at construction time reads it -- every one so far depends only
+     * on the word and its position, not on what else has been filled in.
+     */
+    public function wordSatisfiesInvariants(string $word, int $cell): bool
+    {
+        foreach ($this->invariants as $invariant) {
+            if (!$invariant->allows($word, $cell, [], $this->grid)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

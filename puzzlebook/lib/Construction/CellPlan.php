@@ -35,9 +35,12 @@ final class CellPlan
 
     private int $survivesPrefix;
     private string $label;
+    private ?string $description;
     private ?string $literal;
     private ?string $staticFirstLetter;
     private bool $allowsLeftMatch;
+    private bool $dependsOnOtherCells;
+    private ?int $fixedLength;
 
     /**
      * @param int $survivesPrefix How many of the chain's spelling rules this word must
@@ -59,6 +62,20 @@ final class CellPlan
      * @param bool $allowsLeftMatch True only for a cell that WANTS to start on the
      *     letter its left neighbour ended on -- one half of a deliberate matching
      *     pair. Everywhere else that collision is an accident to avoid.
+     * @param bool $dependsOnOtherCells True when the shape can only be judged against
+     *     a word placed elsewhere -- the second half of any deliberate pair. Such a
+     *     plan can't be counted against the dictionary in isolation, so bin/check.php
+     *     reports it rather than measuring it and finding zero.
+     * @param string|null $description What to call this in a message meant for a
+     *     PERSON -- "step 8: six-letter words whose 2nd letter is A" rather than the
+     *     internal label ("stage8") that labels exist for (the dictionary's own
+     *     bookkeeping). Falls back to the label itself if a rule doesn't set one.
+     * @param int|null $fixedLength Set when EVERY word this plan could ever accept is
+     *     exactly this many letters (a rule with its own length parameter reports
+     *     this -- see SpellingRule::fixedLength()). Lets the filler draw from a pool
+     *     already narrowed to that one length instead of scanning every surviving
+     *     word of every length to find the rare ones that happen to match -- the
+     *     same kind of win $firstLetterHint already gives a cell pinned to one letter.
      */
     public function __construct(
         int $survivesPrefix,
@@ -67,15 +84,21 @@ final class CellPlan
         ?string $literal = null,
         ?string $staticFirstLetter = null,
         ?callable $firstLetterHint = null,
-        bool $allowsLeftMatch = false
+        bool $allowsLeftMatch = false,
+        bool $dependsOnOtherCells = false,
+        ?string $description = null,
+        ?int $fixedLength = null
     ) {
+        $this->dependsOnOtherCells = $dependsOnOtherCells;
         $this->survivesPrefix = $survivesPrefix;
         $this->shape = $shape;
         $this->label = $label;
+        $this->description = $description;
         $this->literal = $literal;
         $this->staticFirstLetter = $staticFirstLetter;
         $this->firstLetterHint = $firstLetterHint;
         $this->allowsLeftMatch = $allowsLeftMatch;
+        $this->fixedLength = $fixedLength;
     }
 
     /** A plan with no requirement beyond surviving the first $survivesPrefix rules. */
@@ -84,15 +107,20 @@ final class CellPlan
         return new self($survivesPrefix, static fn (): bool => true, $label);
     }
 
-    /** A plan for a word decided in advance -- the answer, or a revealed word. */
-    public static function literal(string $word, int $survivesPrefix, string $label): self
+    /** A plan for a word decided in advance -- the answer, a revealed word, or one
+     * half of a pair a rule chose for itself during construction. */
+    public static function literal(string $word, int $survivesPrefix, string $label, ?string $description = null): self
     {
         return new self(
             $survivesPrefix,
             static fn (string $candidate): bool => $candidate === $word,
             $label,
             $word,
-            $word[0]
+            $word[0],
+            null,
+            false,
+            false,
+            $description
         );
     }
 
@@ -121,6 +149,7 @@ final class CellPlan
             null,
             null,
             $needed,
+            true,
             true
         );
     }
@@ -130,9 +159,21 @@ final class CellPlan
         return $this->survivesPrefix;
     }
 
+    /** The one length every acceptable word must be, or null if length is unrestricted. */
+    public function fixedLength(): ?int
+    {
+        return $this->fixedLength;
+    }
+
     public function label(): string
     {
         return $this->label;
+    }
+
+    /** What to call this plan in a message meant for a person, not the dictionary. */
+    public function description(): string
+    {
+        return $this->description ?? $this->label;
     }
 
     /** The whole word, when it was decided in advance; null if it's to be looked up. */
@@ -151,6 +192,12 @@ final class CellPlan
     public function allowsLeftMatch(): bool
     {
         return $this->allowsLeftMatch;
+    }
+
+    /** True if this cell's requirement can only be judged against a word placed elsewhere. */
+    public function dependsOnOtherCells(): bool
+    {
+        return $this->dependsOnOtherCells;
     }
 
     /**

@@ -1,0 +1,225 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Puzzlebook2\Dictionary;
+
+/**
+ * Pure, structural checks on a single word's spelling. Nothing here looks at
+ * what a word means -- only at its letters and their positions -- so none of
+ * it requires English fluency to apply by hand.
+ */
+final class WordTags
+{
+    private const VOWELS = ['a', 'e', 'i', 'o', 'u'];
+
+    public static function isVowel(string $letter): bool
+    {
+        return in_array($letter, self::VOWELS, true);
+    }
+
+    public static function isPalindrome(string $word): bool
+    {
+        return $word === strrev($word);
+    }
+
+    /** True if $word contains $runLength or more consecutive non-vowel letters. */
+    public static function hasConsonantRun(string $word, int $runLength): bool
+    {
+        $run = 0;
+        $len = strlen($word);
+        for ($i = 0; $i < $len; $i++) {
+            if (self::isVowel($word[$i])) {
+                $run = 0;
+                continue;
+            }
+            $run++;
+            if ($run >= $runLength) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True if $word contains $runLength or more consecutive vowels (Y never counts). */
+    public static function hasVowelRun(string $word, int $runLength): bool
+    {
+        $run = 0;
+        $len = strlen($word);
+        for ($i = 0; $i < $len; $i++) {
+            if (!self::isVowel($word[$i])) {
+                $run = 0;
+                continue;
+            }
+            $run++;
+            if ($run >= $runLength) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 1-indexed letter lookup; null if $word is shorter than $position. */
+    public static function letterAt(string $word, int $position): ?string
+    {
+        $index = $position - 1;
+        if ($index < 0 || $index >= strlen($word)) {
+            return null;
+        }
+        return $word[$index];
+    }
+
+    public static function firstLetter(string $word): string
+    {
+        return $word[0];
+    }
+
+    public static function lastLetter(string $word): string
+    {
+        return $word[strlen($word) - 1];
+    }
+
+    /** True if the word's last letter is the one immediately after its first letter in the alphabet (A__B, B__C, ...). */
+    public static function hasAlphabetAdjacentEnds(string $word): bool
+    {
+        if (strlen($word) < 2) {
+            return false;
+        }
+        return (ord(self::lastLetter($word)) - ord(self::firstLetter($word))) === 1;
+    }
+
+    /** True if $word contains $needle anywhere in it ("ee", "z", "tion", ...). */
+    public static function contains(string $word, string $needle): bool
+    {
+        return str_contains($word, $needle);
+    }
+
+    /**
+     * True if $word's letters never go backwards through the alphabet -- "almost",
+     * "begin", "chimp". Repeated letters are allowed ("bee" counts), since they don't
+     * go backwards either.
+     */
+    public static function isInAlphabeticalOrder(string $word): bool
+    {
+        $len = strlen($word);
+        for ($i = 1; $i < $len; $i++) {
+            if ($word[$i] < $word[$i - 1]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** True if BOTH the first and last letter of $word are in $letters. */
+    public static function bothEndsIn(string $word, array $letters): bool
+    {
+        return in_array(self::firstLetter($word), $letters, true)
+            && in_array(self::lastLetter($word), $letters, true);
+    }
+
+    /** Standard English Scrabble tile values. */
+    private const SCRABBLE = [
+        'a' => 1, 'b' => 3, 'c' => 3, 'd' => 2, 'e' => 1, 'f' => 4, 'g' => 2, 'h' => 4,
+        'i' => 1, 'j' => 8, 'k' => 5, 'l' => 1, 'm' => 3, 'n' => 1, 'o' => 1, 'p' => 3,
+        'q' => 10, 'r' => 1, 's' => 1, 't' => 1, 'u' => 1, 'v' => 4, 'w' => 4, 'x' => 8,
+        'y' => 4, 'z' => 10,
+    ];
+
+    /** Sum of the letters' alphabet positions: A=1, B=2 ... Z=26. */
+    public static function letterSum(string $word): int
+    {
+        $sum = 0;
+        for ($i = 0, $len = strlen($word); $i < $len; $i++) {
+            $sum += ord($word[$i]) - 96;
+        }
+        return $sum;
+    }
+
+    public static function isPrime(int $n): bool
+    {
+        if ($n < 2) {
+            return false;
+        }
+        for ($d = 2; $d * $d <= $n; $d++) {
+            if ($n % $d === 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The consonant/vowel shape of $word as a string of C and V -- "banana" is
+     * "CVCVCV". Y counts as a consonant, as everywhere else here.
+     */
+    public static function consonantVowelPattern(string $word): string
+    {
+        $pattern = '';
+        for ($i = 0, $len = strlen($word); $i < $len; $i++) {
+            $pattern .= self::isVowel($word[$i]) ? 'V' : 'C';
+        }
+        return $pattern;
+    }
+
+    /** The highest number of times any single letter in $letters appears in $word. */
+    public static function maxRepeatAmong(string $word, array $letters): int
+    {
+        $counts = [];
+        for ($i = 0, $len = strlen($word); $i < $len; $i++) {
+            $letter = $word[$i];
+            if (in_array($letter, $letters, true)) {
+                $counts[$letter] = ($counts[$letter] ?? 0) + 1;
+            }
+        }
+        return $counts === [] ? 0 : max($counts);
+    }
+
+    /** What $word would score in Scrabble, ignoring board bonuses. */
+    public static function scrabbleScore(string $word): int
+    {
+        $score = 0;
+        for ($i = 0, $len = strlen($word); $i < $len; $i++) {
+            $score += self::SCRABBLE[$word[$i]] ?? 0;
+        }
+        return $score;
+    }
+
+    /** How many of $word's letters are vowels (Y never counts). */
+    public static function vowelCount(string $word): int
+    {
+        $count = 0;
+        for ($i = 0, $len = strlen($word); $i < $len; $i++) {
+            if (self::isVowel($word[$i])) {
+                $count++;
+            }
+        }
+        return $count;
+    }
+
+    /**
+     * True if $word contains the same CONSONANT letter twice in a row (HAPPY,
+     * LETTER, SUMMER). Vowels doubled up (MOON, FREE) don't count here -- a
+     * repeated vowel is already a vowel run of 2, VowelRunRule's territory,
+     * so this stays a distinct, non-overlapping pattern.
+     */
+    public static function hasDoubledConsonant(string $word): bool
+    {
+        for ($i = 0, $len = strlen($word); $i < $len - 1; $i++) {
+            if ($word[$i] === $word[$i + 1] && !self::isVowel($word[$i])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True if every letter in $word is one of $allowedLetters (each a single lowercase letter). */
+    public static function usesOnlyLetters(string $word, array $allowedLetters): bool
+    {
+        for ($i = 0, $len = strlen($word); $i < $len; $i++) {
+            if (!in_array($word[$i], $allowedLetters, true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+}

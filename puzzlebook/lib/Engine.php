@@ -9,39 +9,20 @@ use Puzzlebook\Reveals\ColumnLastLettersReveal;
 use Puzzlebook\Reveals\EveryNthWordReveal;
 use Puzzlebook\Reveals\LastSurvivorOnPageReveal;
 use Puzzlebook\Reveals\RevealInterface;
-use Puzzlebook\Rules\AlphabetAdjacentEndsRule;
-use Puzzlebook\Rules\AlphabeticalOrderRule;
-use Puzzlebook\Rules\BothEndsInSetRule;
-use Puzzlebook\Rules\ConsonantRunRule;
-use Puzzlebook\Rules\ConditionalCellRule;
-use Puzzlebook\Rules\ConsonantVowelPatternRule;
-use Puzzlebook\Rules\ContainsSubstringRule;
-use Puzzlebook\Rules\LetterSumRule;
-use Puzzlebook\Rules\RepeatedLetterRule;
-use Puzzlebook\Rules\LetterCountRule;
-use Puzzlebook\Rules\EveryNthSurvivorRule;
-use Puzzlebook\Rules\KnightAdjacentInitialRule;
-use Puzzlebook\Rules\KnightAdjacentSurvivingLengthRule;
-use Puzzlebook\Rules\LengthAndEndingRule;
-use Puzzlebook\Rules\LetterAtPositionRule;
-use Puzzlebook\Rules\MatchingNeighbourEndsRule;
-use Puzzlebook\Rules\PalindromeRule;
-use Puzzlebook\Rules\PrimePositionRule;
-use Puzzlebook\Rules\ScrabbleScoreRule;
-use Puzzlebook\Rules\UsesOnlyLettersRule;
-use Puzzlebook\Rules\VowelFractionRule;
-use Puzzlebook\Rules\RestrictedAlphabetLengthRule;
 use Puzzlebook\Rules\RuleInterface;
-use Puzzlebook\Rules\SameCellNextPageRule;
-use Puzzlebook\Rules\VowelRunRule;
 
 /**
- * Turns a step's plain-array config (as written in config/chain.php) into
- * the real Rule or Reveal object, then runs it. Each rule or reveal's
- * actual meaning lives in its own class, under lib/Rules/ or lib/Reveals/
- * -- this file is just the registry mapping a config's 'type' or
- * 'mechanism' string to the class that implements it, so config/chain.php
- * never has to spell out a class name directly.
+ * Turns a step's plain-array config (as written in config/chain.json) into
+ * the real Rule or Reveal object, then runs it.
+ *
+ * A rule's 'type' is simply the short name of its class under
+ * Puzzlebook\Rules -- the clue library IS the lib/Rules/ directory, and
+ * every card in it is a self-contained, zero-argument class (see
+ * config/README.md). Adding a new card never touches this file: there is
+ * no registry to update, just a class to add.
+ *
+ * Reveals (lib/Reveals/) are a separate, currently-inactive mechanism and
+ * keep their own 'mechanism' + 'params' shape below.
  *
  * This -- and the classes it dispatches to -- is the only place a rule or
  * reveal *means* anything. It runs exclusively on the server:
@@ -54,43 +35,17 @@ use Puzzlebook\Rules\VowelRunRule;
  */
 final class Engine
 {
-    /** @param array{type:string,params?:array} $rule */
+    /** @param array{type:string} $rule */
     public static function ruleFromConfig(array $rule): RuleInterface
     {
-        $p = $rule['params'] ?? [];
-
-        return match ($rule['type']) {
-            'palindrome' => new PalindromeRule(),
-            'consonant_run' => new ConsonantRunRule($p['length']),
-            'vowel_run' => new VowelRunRule($p['length'], $p['max_length'] ?? null),
-            'letter_count' => new LetterCountRule($p['letter'], $p['count']),
-            'consonant_vowel_pattern' => new ConsonantVowelPatternRule($p['pattern']),
-            'repeated_letter' => new RepeatedLetterRule($p['times'], $p['group'] ?? 'consonant'),
-            'letter_sum' => new LetterSumRule($p['test'] ?? 'prime', $p['n'] ?? 0),
-            'uses_only_letters' => new UsesOnlyLettersRule($p['letters'], $p['length'] ?? null),
-            'scrabble_score' => new ScrabbleScoreRule($p['multiple_of'], $p['remainder'] ?? 0),
-            'vowel_fraction' => new VowelFractionRule($p['numerator'], $p['denominator']),
-            'prime_position' => new PrimePositionRule(),
-            'conditional_cell' => new ConditionalCellRule($p['trigger'] ?? [0, 0], $p['target'] ?? [0, -1]),
-            'same_cell_next_page' => new SameCellNextPageRule(
-                $p['letters'] ?? ['j'],
-                $p['position'] ?? 2,
-                $p['page_offset'] ?? 1,
-                $p['remove_trigger'] ?? true
-            ),
-            'alphabet_adjacent_ends' => new AlphabetAdjacentEndsRule(),
-            'alphabetical_order' => new AlphabeticalOrderRule($p['min_length'] ?? null),
-            'both_ends_in_set' => new BothEndsInSetRule($p['letters'], $p['max_length'] ?? null),
-            'contains_substring' => new ContainsSubstringRule($p['needle']),
-            'letter_at_position' => new LetterAtPositionRule($p['position'], $p['matches'], $p['length'] ?? null),
-            'length_and_ending' => new LengthAndEndingRule($p['length'], $p['ending']),
-            'every_nth_survivor' => new EveryNthSurvivorRule($p['n']),
-            'knight_adjacent' => new KnightAdjacentInitialRule($p['initials']),
-            'knight_adjacent_surviving_length' => new KnightAdjacentSurvivingLengthRule($p['length']),
-            'matching_neighbour_ends' => new MatchingNeighbourEndsRule(),
-            'restricted_alphabet_length' => new RestrictedAlphabetLengthRule($p['length'], $p['letters']),
-            default => throw new \InvalidArgumentException("Unknown rule type '{$rule['type']}'"),
-        };
+        $class = __NAMESPACE__ . '\\Rules\\' . $rule['type'];
+        if (!is_a($class, RuleInterface::class, true) || !(new \ReflectionClass($class))->isInstantiable()) {
+            throw new \InvalidArgumentException(
+                "Unknown rule type '{$rule['type']}' -- it must be the short name of a concrete, "
+                . 'zero-argument class under Puzzlebook\\Rules.'
+            );
+        }
+        return new $class();
     }
 
     /** @param array{mechanism:string,params?:array} $reveal */
@@ -115,7 +70,7 @@ final class Engine
     /**
      * @param string[] $words
      * @param bool[] $keep
-     * @param array{type:string,params?:array} $rule
+     * @param array{type:string} $rule
      * @return bool[]
      */
     public static function applyRule(array $words, Grid $grid, array $keep, array $rule): array

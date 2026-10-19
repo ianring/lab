@@ -12,10 +12,11 @@ use Puzzlebook\WordTags;
  * in Scrabble: R, S, T, L, N, E, U, G) -- a word of any other length always
  * survives this one, untouched.
  */
-final class RestrictedAlphabetLengthRule extends SpellingRule
+/** No card yet -- subclass with a real length/allowedLetters combination to add one. */
+abstract class RestrictedAlphabetLengthRule extends SpellingRule
 {
     /** @param string[] $allowedLetters */
-    public function __construct(private int $length, private array $allowedLetters)
+    protected function __construct(private int $length, private array $allowedLetters)
     {
     }
 

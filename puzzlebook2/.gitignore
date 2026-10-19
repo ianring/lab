@@ -1,0 +1,8 @@
+build/
+build.log
+print/libs/
+data/cache/*
+!data/cache/.gitignore
+web/book.json
+web/chain.json
+config/chain.tuned.json

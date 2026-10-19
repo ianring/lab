@@ -30,10 +30,10 @@
        surrounding app chrome still follows the theme, which gives the same
        dark-app / light-document split a print preview normally has. */
     --desk: #d9dad5;
-    --sheet: #ffffff;
-    --sheet-ink: #000000;
-    --sheet-faint: #9a9a9a;
-    --sheet-rule: #d8d8d8;
+    --sheet: #f6f0df;        /* aged paperback stock, not white */
+    --sheet-edge: #e2d9c2;   /* the slightly darker cut edge of the block */
+    --sheet-ink: #15120c;    /* warm near-black, the way ink sits on cream */
+    --sheet-faint: #9c9075;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -294,15 +294,17 @@
 
   /* ---------- book pages ---------- */
 
-  /* A sheet of US Letter paper. Fixed size, nothing computed: 68rem x 88rem
-     is exactly 8.5 x 11, and an 8rem pad is exactly 1 inch of it (68 / 8.5). */
+  /* A mass-market paperback page: 4.25 x 6.87 inches. Fixed size, nothing
+     computed -- at 8rem to the inch that's 34rem x 55rem, with a 3rem pad
+     for the 3/8" margin a book that size can afford. */
   .page {
-    width: 68rem;
-    height: 88rem;
+    width: 34rem;
+    height: 55rem;
     flex: 0 0 auto;
-    padding: 8rem;
+    padding: 3rem;
     background: var(--sheet);
     color: var(--sheet-ink);
+    border: 1px solid var(--sheet-edge);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), 0 8px 24px rgba(0, 0, 0, 0.17);
     display: flex;
     flex-direction: column;
@@ -312,22 +314,16 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 1rem;
+    margin-bottom: 0.6rem;
     flex: 0 0 auto;
   }
   .page-head h3 {
-    font-size: 0.8rem;
+    font-size: 0.6rem;
     font-weight: 600;
     color: var(--sheet-faint);
     letter-spacing: 0.12em;
     text-transform: uppercase;
   }
-  .page-count {
-    font-family: "IBM Plex Mono", monospace;
-    font-size: 0.75rem;
-    color: var(--sheet-faint);
-  }
-
   /* Fills the rest of the sheet, so 20 rows land inside the bottom margin. */
   .grid {
     display: grid;
@@ -335,7 +331,7 @@
     grid-auto-rows: 1fr;
     flex: 1 1 auto;
     min-height: 0;
-    column-gap: 0.5rem;
+    column-gap: 0.25rem;
   }
 
   .cell {
@@ -344,7 +340,10 @@
     align-items: center;
     justify-content: center;
     font-family: "IBM Plex Mono", monospace;
-    font-size: 1rem;
+    /* 0.72rem is as large as 6 columns of up to 10 letters will go on a page
+       this narrow -- about 6.5pt in print, which is very small. See the note
+       in the README about trim size versus column count. */
+    font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.01em;
     text-align: center;
@@ -353,8 +352,12 @@
     overflow: hidden;
   }
 
-  /* Position numbers are proofing aids, not part of the printed book. */
+  /* Position numbers are a proofing aid, not part of the printed book, so they
+     stay hidden -- the preview should look like the page a reader gets.
+     Switch display back to block to get them for cross-checking against
+     build/pages.txt, which lists the same numbers. */
   .cell .idx {
+    display: none;
     position: absolute;
     top: 0;
     left: 0;
@@ -386,6 +389,16 @@
     text-decoration-color: var(--sheet-ink);
   }
 
+  /* The words THIS step just crossed out, specifically -- distinct from every
+     word struck by an earlier step, which only gets the plain strike above.
+     Cleared the moment another step is applied, so it always shows the most
+     recent action and nothing older. */
+  .cell.just-removed {
+    background: color-mix(in srgb, var(--accent-strike) 22%, transparent);
+    box-shadow: 0 0 0 2px var(--accent-strike);
+  }
+  .cell.just-removed .idx { color: var(--sheet-ink); opacity: 0.6; }
+
   .cell .order-badge {
     position: absolute;
     top: 0;
@@ -416,11 +429,12 @@
     gap: 0.9rem;
     font-size: 0.72rem;
     color: #4a4a4a;
-    width: 68rem;
+    width: 34rem;   /* matches the page width */
   }
   .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
   .swatch { width: 0.75rem; height: 0.75rem; border-radius: 3px; display: inline-block; }
   .swatch.struck { background: var(--sheet-ink); }
+  .swatch.just-removed { background: color-mix(in srgb, var(--accent-strike) 22%, transparent); border: 2px solid var(--accent-strike); }
   .swatch.revealed { background: var(--accent-mark); }
   .swatch.answer { background: transparent; border: 2px solid var(--accent-active); }
 
@@ -435,7 +449,7 @@
       <span class="brand-mark">🐉</span>
       <div class="brand-text">
         <h1>Dragon Hunt</h1>
-        <p class="subtitle">Watching the puzzlebook chain solve itself, one step at a time</p>
+        <p class="subtitle" id="subtitle">Watching the puzzlebook chain solve itself, one step at a time</p>
       </div>
     </div>
     <div class="progress-summary">
@@ -453,6 +467,7 @@
     <section class="book">
       <div class="legend">
         <span><i class="swatch struck"></i> crossed out</span>
+        <span><i class="swatch just-removed"></i> crossed out by THIS step</span>
         <span><i class="swatch revealed"></i> read for this step's reveal</span>
         <span><i class="swatch answer"></i> the answer</span>
       </div>
@@ -500,6 +515,15 @@ function resetState() {
   words = loadedBook.words;
   totalWords = grid.pages * grid.rows * grid.cols;
   CHAIN = loadedChain;
+
+  // Rule wording comes from chain.json, which bin/build.php writes -- so an edit
+  // to config/chain.json isn't visible here until the book is rebuilt. Showing the
+  // build time makes a stale preview obvious rather than mysterious.
+  if (loadedChain.built_at) {
+    const subtitle = document.getElementById("subtitle");
+    if (subtitle) subtitle.textContent = `Built ${loadedChain.built_at} — rebuild to pick up rule edits`;
+  }
+
   keep = new Array(totalWords).fill(true);
   removedAtStep = new Array(totalWords).fill(0);
   stepIndex = 0;
@@ -533,13 +557,13 @@ function buildBookDom() {
 
     const head = document.createElement("div");
     head.className = "page-head";
-    head.innerHTML = `<h3>Page ${page + 1}</h3><span class="page-count" data-page-count="${page}"></span>`;
+    head.innerHTML = `<h3>Page ${page + 1}</h3>`;
     pageEl.appendChild(head);
 
     const gridEl = document.createElement("div");
     gridEl.className = "grid";
     // Column count comes from the built book, not the stylesheet, so changing
-    // the grid in config/layout.php doesn't silently break the preview.
+    // the grid in config/layout.json doesn't silently break the preview.
     gridEl.style.gridTemplateColumns = `repeat(${grid.cols}, 1fr)`;
     for (let row = 0; row < grid.rows; row++) {
       for (let col = 0; col < grid.cols; col++) {
@@ -556,28 +580,20 @@ function buildBookDom() {
   }
 }
 
-function pageSurvivorCount(page) {
-  let n = 0;
-  for (let row = 0; row < grid.rows; row++) {
-    for (let col = 0; col < grid.cols; col++) {
-      if (keep[linearIndex(grid, page, row, col)]) n++;
-    }
-  }
-  return n;
-}
-
-function refreshPageCounts() {
-  document.querySelectorAll("[data-page-count]").forEach((el) => {
-    const page = Number(el.dataset.pageCount);
-    el.textContent = `${pageSurvivorCount(page)} / ${grid.rows * grid.cols} left`;
-  });
-}
-
 function clearRevealHighlights() {
   document.querySelectorAll(".cell.revealed").forEach((el) => {
     el.classList.remove("revealed");
     const badge = el.querySelector(".order-badge");
     if (badge) badge.remove();
+  });
+}
+
+// Only ever marks the MOST RECENT eliminate step's targets -- cleared every time
+// another step (eliminate or reveal) is about to be applied, so it never lingers
+// and shows an earlier step's work by mistake.
+function clearJustRemoved() {
+  document.querySelectorAll(".cell.just-removed").forEach((el) => {
+    el.classList.remove("just-removed");
   });
 }
 
@@ -594,7 +610,7 @@ function applyRevealHighlights(cells) {
 
 function applyStrikes(indices, stepId) {
   indices.forEach((i) => {
-    cellEls[i].classList.add("struck");
+    cellEls[i].classList.add("struck", "just-removed");
     removedAtStep[i] = stepId;
     cellEls[i].title = `word ${i + 1} of ${totalWords} -- crossed out at step ${stepId}`;
   });
@@ -613,7 +629,6 @@ function updateGlobalStats() {
   statRemaining.textContent = remaining;
   statPct.textContent = fmtPct(removedPct);
   statStage.textContent = stepIndex >= CHAIN.steps.length ? "done" : `${stepIndex + 1} / ${CHAIN.steps.length}`;
-  refreshPageCounts();
 }
 
 function renderRail() {
@@ -664,7 +679,7 @@ function renderRail() {
           html += `
             <div class="final-banner ${ok ? "ok" : "bad"}">
               ${ok
-                ? `✓ Exactly one word survived: <strong>${record.final.expected_answer.toUpperCase()}</strong> -- matches config/chain.php.`
+                ? `✓ Exactly one word survived: <strong>${record.final.expected_answer.toUpperCase()}</strong> -- matches config/chain.json.`
                 : `✗ Expected exactly one survivor ('${record.final.expected_answer}'), got `
                   + `${record.final.survivor_words.length}: ${record.final.survivor_words.join(", ")}.`}
             </div>
@@ -727,6 +742,7 @@ async function applyOneStep() {
     }
 
     clearRevealHighlights();
+    clearJustRemoved();
 
     if (data.kind === "eliminate") {
       keep = data.keep;

@@ -8,7 +8,7 @@ use Puzzlebook\WordTags;
 
 /**
  * Cross out every word whose consonant/vowel shape is exactly $pattern --
- * "CVCVCVC" catches MONITOR, GENERIC, PARADOX and MEDICAL.
+ * "CVCVCV" catches COCOCO, DELICE, BALAMO.
  *
  * The pattern's own length fixes the word length, so this is always a
  * precise rule rather than a greedy one. Y counts as a consonant.
@@ -18,23 +18,18 @@ use Puzzlebook\WordTags;
  */
 final class ConsonantVowelPatternRule extends SpellingRule
 {
-    private string $pattern;
-
-    public function __construct(string $pattern)
-    {
-        $this->pattern = strtoupper($pattern);
-    }
+    private const PATTERN = 'CVCVCV';
 
     public function failsWord(string $word): bool
     {
-        if (strlen($word) !== strlen($this->pattern)) {
+        if (strlen($word) !== strlen(self::PATTERN)) {
             return false;
         }
-        return WordTags::consonantVowelPattern($word) === $this->pattern;
+        return WordTags::consonantVowelPattern($word) === self::PATTERN;
     }
 
     public function describe(): string
     {
-        return "words shaped {$this->pattern} (consonant/vowel)";
+        return 'words shaped ' . self::PATTERN . ' (consonant/vowel)';
     }
 }

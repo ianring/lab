@@ -196,6 +196,22 @@ final class WordTags
         return $count;
     }
 
+    /**
+     * True if $word contains the same CONSONANT letter twice in a row (HAPPY,
+     * LETTER, SUMMER). Vowels doubled up (MOON, FREE) don't count here -- a
+     * repeated vowel is already a vowel run of 2, VowelRunRule's territory,
+     * so this stays a distinct, non-overlapping pattern.
+     */
+    public static function hasDoubledConsonant(string $word): bool
+    {
+        for ($i = 0, $len = strlen($word); $i < $len - 1; $i++) {
+            if ($word[$i] === $word[$i + 1] && !self::isVowel($word[$i])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** True if every letter in $word is one of $allowedLetters (each a single lowercase letter). */
     public static function usesOnlyLetters(string $word, array $allowedLetters): bool
     {

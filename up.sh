@@ -11,7 +11,7 @@
 # rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/3d root@i-a-n.ca:/root/lab
 # rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/kiln root@i-a-n.ca:/root/lab
 
-rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/kiln root@ianring.com:/var/www/darkware.ca/public_html/
+# rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/kiln root@ianring.com:/var/www/darkware.ca/public_html/
 
 # Connect4 writes nothing at runtime — the game state travels in the URL — so
 # there is no data directory to exclude and no ownership to set afterwards.
@@ -19,9 +19,10 @@ rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/kiln root@ianrin
 
 # rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/sudoku root@i-a-n.ca:/root/lab
 # rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/fruit root@i-a-n.ca:/root/lab
-rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/pathme root@i-a-n.ca:/root/lab
-rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/sucker root@i-a-n.ca:/root/lab
+# rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/pathme root@i-a-n.ca:/root/lab
+# rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/sucker root@i-a-n.ca:/root/lab
 rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/puzzlebook root@i-a-n.ca:/root/lab
+rsync -avh -e ssh /Users/ian/Documents/Repos/github/ianring/lab/puzzlebook2 root@i-a-n.ca:/root/lab
 
 # ssh -T root@138.197.153.40 'cd /root/book/assets && php convert-svg-assets.php'
 exit

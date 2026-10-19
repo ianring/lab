@@ -12,10 +12,13 @@ use Puzzlebook\Grid;
  * among survivors), not a pure spelling check, so it has no build()-side
  * counterpart the way SpellingRule subclasses do -- lib/ChainBuilder.php
  * places its victim by tracking the same running count itself.
+ *
+ * Shared base for a family of cards, one per $n -- see EveryTenthSurvivorRule
+ * for the shape of a concrete one.
  */
-final class EveryNthSurvivorRule implements RuleInterface
+abstract class EveryNthSurvivorRule implements RuleInterface
 {
-    public function __construct(private int $n)
+    protected function __construct(private int $n)
     {
     }
 

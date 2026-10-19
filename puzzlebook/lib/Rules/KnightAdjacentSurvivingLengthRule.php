@@ -12,13 +12,15 @@ use Puzzlebook\Grid;
 
 /**
  * Cross out every surviving word that is a knight's move (as in chess) from
- * a word of exactly $length letters that is ALSO still surviving.
+ * a word of exactly $length letters that is ALSO still surviving. A word of
+ * that length is NOT itself removed here.
  *
- * Unlike the other positional rules, a crossed-out word does NOT count as a
- * neighbour here -- the rule says "surviving", so a word already struck
- * through is not a launch pad. apply() therefore reads a snapshot of $keep
- * taken before the rule runs, not $keep as it's updated mid-pass, so the
- * result can't depend on iteration order.
+ * That exemption is what makes the step well-behaved. The launch pads are
+ * the only thing the rule reads, and the rule never removes one, so the set
+ * of launch pads is fixed for the whole step: a reader can work through it
+ * in any order, crossing out as they go, and get the same answer. Nobody is
+ * asked to remember a word they just struck through. The launch pads are
+ * cleared by the following step, which removes every word of that length.
  *
  * CONSTRUCTION -- keys first, victims derived.
  *
@@ -39,21 +41,34 @@ use Puzzlebook\Grid;
  * fires from -- so they're handed to the final step to clear, shaped to be
  * exactly what that step removes.
  */
-final class KnightAdjacentSurvivingLengthRule implements RuleInterface, ConstructsCells
+/** No card yet -- subclass with a real length to add one (the finale's "key" rule). */
+abstract class KnightAdjacentSurvivingLengthRule implements RuleInterface, ConstructsCells
 {
-    public function __construct(private int $length)
+    protected function __construct(private int $length)
     {
+    }
+
+    public function length(): int
+    {
+        return $this->length;
     }
 
     public function apply(array $words, Grid $grid, array $keep): array
     {
-        $keepBefore = $keep;
+        // Reading order, acting on what is standing at that moment -- what a reader
+        // crossing out as they go actually does.
+        //
+        // A launch pad is never removed by its own step. That is what makes the
+        // order irrelevant: the set of launch pads cannot change while the step is
+        // being worked through, so it doesn't matter where the reader starts, and
+        // nobody is ever asked to remember a word they have just crossed out. The
+        // launch pads are cleared by the following step instead.
         foreach ($words as $i => $word) {
-            if (!$keepBefore[$i]) {
+            if (!$keep[$i] || strlen($word) === $this->length) {
                 continue;
             }
             foreach ($grid->knightNeighbours($i) as $neighbourIndex) {
-                if ($keepBefore[$neighbourIndex] && strlen($words[$neighbourIndex]) === $this->length) {
+                if ($keep[$neighbourIndex] && strlen($words[$neighbourIndex]) === $this->length) {
                     $keep[$i] = false;
                     break;
                 }
@@ -80,16 +95,14 @@ final class KnightAdjacentSurvivingLengthRule implements RuleInterface, Construc
         // A launch pad: the right length, and shaped so the final step is what clears it.
         $keyShape = static fn (string $word): bool => strlen($word) === $length && $finalRule->failsWord($word);
 
-        // A victim: survives everything up to here, where a key kills it. Kept clear of
-        // the launch-pad shape, so the only words the final step removes are the keys.
-        $victimShape = static fn (string $word): bool => !$finalRule->failsWord($word);
-
-        // One plan each, shared across every cell of that kind -- see CellPlan.
+        // A victim: survives everything up to here, where a key kills it. No shape
+        // requirement at all -- a victim that happens to be launch-pad length is
+        // simply skipped by this step and cleared by the next one.
         $keyPlan = new CellPlan($survivesAll, $keyShape, 'key');
-        $victimPlan = new CellPlan($survivesAll, $victimShape, 'victim');
+        $victimPlan = CellPlan::surviving($survivesAll, 'victim');
 
         $target = $context->targetSurvivors();
-        $placedAny = false;
+        $keyCells = [];
 
         foreach ($canvas->freeCellsShuffled($context->seed()) as $candidate) {
             if ($canvas->survivorCount() >= $target) {
@@ -105,10 +118,11 @@ final class KnightAdjacentSurvivingLengthRule implements RuleInterface, Construc
                 continue;
             }
 
-            // Reject the candidate unless everything it would kill is allowed to be a
-            // survivor and is still free -- this is what protects the answer.
-            $usable = [];
+            // Reject the candidate unless everything it would kill is allowed to be
+            // a survivor -- this is what protects the answer. Launch pads sitting
+            // next to each other is fine: this step doesn't remove them.
             $blocked = false;
+            $usable = [];
             foreach ($neighbours as $n) {
                 if (!$canvas->mayBeSurvivor($n)) {
                     $blocked = true;
@@ -125,13 +139,13 @@ final class KnightAdjacentSurvivingLengthRule implements RuleInterface, Construc
             // The key is NOT replaceable: this rule fires from it, so its shape is
             // load-bearing. Its victims are, so the reveal can use them.
             $canvas->claimSurvivor($candidate, $finalStepId, $keyPlan, false);
+            $keyCells[$candidate] = true;
             foreach ($usable as $n) {
                 $canvas->claimSurvivor($n, $context->stepId(), $victimPlan, true);
             }
-            $placedAny = true;
         }
 
-        if (!$placedAny) {
+        if ($keyCells === []) {
             throw new ConstructionRetry(
                 "step {$context->stepId()} found nowhere to put a launch-pad word"
             );
@@ -153,6 +167,7 @@ final class KnightAdjacentSurvivingLengthRule implements RuleInterface, Construc
 
     public function describe(): string
     {
-        return "words a knight's move from a STILL-SURVIVING {$this->length}-letter word";
+        return "words a knight's move from a surviving {$this->length}-letter word "
+            . "({$this->length}-letter words themselves are spared)";
     }
 }

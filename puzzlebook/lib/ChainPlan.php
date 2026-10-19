@@ -10,7 +10,7 @@ use Puzzlebook\Rules\SpellingRule;
 
 /**
  * Everything the builder needs to know about a chain, read once out of
- * config/chain.php: which steps there are, which rule object each one uses,
+ * config/chain.json: which steps there are, which rule object each one uses,
  * which of them know how to construct themselves, and in what order they get
  * to claim cells.
  *
@@ -50,7 +50,8 @@ final class ChainPlan
     /** @var int[] ids of steps whose budget is derived rather than set by keep_fraction */
     private array $derivedBudgetSteps = [];
 
-    private array $revealStep;
+    /** Optional: a chain is allowed to have none. See revealWords()/revealInterval(). */
+    private ?array $revealStep = null;
     private ?array $finalStep = null;
     private ?SpellingRule $finalRule = null;
 
@@ -61,9 +62,28 @@ final class ChainPlan
 
     public static function fromConfig(array $chain): self
     {
-        $plan = new self($chain['steps']);
+        $plan = new self(self::numberSteps($chain)['steps']);
         $plan->read();
         return $plan;
+    }
+
+    /**
+     * Fills in each step's 'id' from its position, so config/chain.json doesn't have
+     * to carry hand-written numbers.
+     *
+     * A step's number is just where it sits in the list -- it was never independent
+     * information, and writing it out by hand meant every insertion renumbered
+     * everything after it. That went wrong three times in one afternoon. An explicit
+     * 'id' is still honoured if one is given, for a chain that wants to skip numbers.
+     */
+    public static function numberSteps(array $chain): array
+    {
+        foreach ($chain['steps'] as $index => $step) {
+            if (!isset($step['id'])) {
+                $chain['steps'][$index]['id'] = $index + 1;
+            }
+        }
+        return $chain;
     }
 
     private function read(): void
@@ -148,11 +168,11 @@ final class ChainPlan
             }
         }
 
-        if ($revealStep === null) {
-            throw new \RuntimeException('config/chain.php needs one reveal step.');
-        }
+        // A chain is allowed to have no reveal at all -- Book 1 doesn't, while it's
+        // being built without the mechanisms that compete for the same survivor
+        // slots. See revealWords()/revealInterval() for what an absent one returns.
         if ($this->finalStep === null) {
-            throw new \RuntimeException("config/chain.php needs one step marked 'final' => true.");
+            throw new \RuntimeException("config/chain.json needs one step marked 'final' => true.");
         }
         $this->revealStep = $revealStep;
 
@@ -191,20 +211,26 @@ final class ChainPlan
         return isset($this->keepFractions[$stepId]);
     }
 
-    /** @return string[] */
+    /** @return string[] empty if this chain has no reveal step. */
     public function revealWords(): array
     {
-        return explode(' ', $this->revealStep['expected']);
+        return $this->revealStep === null ? [] : explode(' ', $this->revealStep['expected']);
     }
 
+    /** 0 if this chain has no reveal step. */
     public function revealInterval(): int
     {
-        return $this->revealStep['reveal']['params']['n'];
+        return $this->revealStep === null ? 0 : $this->revealStep['reveal']['params']['n'];
     }
 
-    public function revealStepId(): int
+    public function revealStepId(): ?int
     {
-        return $this->revealStep['id'];
+        return $this->revealStep === null ? null : $this->revealStep['id'];
+    }
+
+    public function hasReveal(): bool
+    {
+        return $this->revealStep !== null;
     }
 
     public function finalStepId(): int
@@ -217,8 +243,19 @@ final class ChainPlan
         return $this->finalRule;
     }
 
-    public function contextFor(int $stepId, int $budget, int $targetSurvivors, int $seedBase): ConstructionContext
-    {
+    /**
+     * @param string[] $wordPool
+     * @param array<int,string[]> $prefixPools
+     */
+    public function contextFor(
+        int $stepId,
+        int $budget,
+        int $targetSurvivors,
+        int $seedBase,
+        array $wordPool = [],
+        string $wordPoolHash = '',
+        array $prefixPools = []
+    ): ConstructionContext {
         return new ConstructionContext(
             $stepId,
             $budget,
@@ -228,7 +265,10 @@ final class ChainPlan
             $this->finalRule,
             $targetSurvivors,
             $seedBase + $stepId * 101,
-            $this->earlierSpellingSteps[$stepId] ?? []
+            $this->earlierSpellingSteps[$stepId] ?? [],
+            $wordPool,
+            $wordPoolHash,
+            $prefixPools
         );
     }
 
@@ -278,7 +318,7 @@ final class ChainPlan
     {
         $revealWords = $this->revealWords();
 
-        $declared = $this->revealStep['reveal']['params']['count'] ?? null;
+        $declared = $this->revealStep !== null ? ($this->revealStep['reveal']['params']['count'] ?? null) : null;
         if ($declared !== null && $declared !== count($revealWords)) {
             throw new \RuntimeException(
                 "Step {$this->revealStep['id']} declares count={$declared} but 'expected' splits into "

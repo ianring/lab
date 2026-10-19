@@ -21,9 +21,10 @@ use Puzzlebook\WordTags;
  * worked example, since readers will otherwise wonder what to do with a
  * five-letter word.
  */
-final class VowelFractionRule extends SpellingRule
+/** No card yet -- subclass with real numerator/denominator values to add one. */
+abstract class VowelFractionRule extends SpellingRule
 {
-    public function __construct(private int $numerator, private int $denominator)
+    protected function __construct(private int $numerator, private int $denominator)
     {
     }
 

@@ -19,7 +19,7 @@ final class Solver
 {
     /**
      * @param array{grid: array{pages:int,rows:int,cols:int}, words: string[]} $book
-     * @return array{ok:bool, lines:string[]}
+     * @return array{ok:bool, lines:string[], eliminated:array<int,string[]>}
      */
     public static function run(array $book, array $chain): array
     {
@@ -30,14 +30,29 @@ final class Solver
         $lines = [];
         $ok = true;
 
+        // The actual words each step crosses out IN THE REAL, BUILT BOOK -- not the
+        // theoretical count bin/check.php works from before any word is chosen. Keyed
+        // by step id so a caller that wants to persist them (bin/build.php) can match
+        // each list back to the step that produced it without re-deriving anything.
+        $eliminated = [];
+
         foreach ($chain['steps'] as $step) {
             if ($step['kind'] === 'eliminate') {
+                $beforeKeep = $keep;
                 $before = Engine::countSurvivors($keep);
                 $keep = Engine::applyRule($words, $grid, $keep, $step['rule']);
                 $after = Engine::countSurvivors($keep);
                 $removed = $before - $after;
                 $pctOfBook = $total > 0 ? $removed / $total * 100 : 0.0;
                 $pctOfRemaining = $before > 0 ? $removed / $before * 100 : 0.0;
+
+                $removedWords = [];
+                foreach ($beforeKeep as $i => $wasStanding) {
+                    if ($wasStanding && !$keep[$i]) {
+                        $removedWords[] = $words[$i];
+                    }
+                }
+                $eliminated[$step['id']] = $removedWords;
 
                 $lines[] = sprintf(
                     'Step %d (eliminate): removed %d of %d words (%s%% of the whole book, %s%% of what remained)'
@@ -55,7 +70,7 @@ final class Solver
                     if (count($survivors) === 1) {
                         $finalWord = $words[$survivors[0]];
                         if ($finalWord === $chain['answer']) {
-                            $lines[] = "Final answer: '{$finalWord}' (matches config/chain.php)";
+                            $lines[] = "Final answer: '{$finalWord}' (matches config/chain.json)";
                         } else {
                             $ok = false;
                             $lines[] = "Final answer: '{$finalWord}' -- MISMATCH, expected '{$chain['answer']}'";
@@ -88,6 +103,6 @@ final class Solver
             }
         }
 
-        return ['ok' => $ok, 'lines' => $lines];
+        return ['ok' => $ok, 'lines' => $lines, 'eliminated' => $eliminated];
     }
 }

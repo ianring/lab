@@ -16,20 +16,16 @@ use Puzzlebook\WordTags;
  * printed instruction, because it's the one case a reader might reasonably
  * rule either way.
  *
- * $minLength matters more than it looks. Short words are very often in
- * alphabetical order by chance ("any", "bet", "cow", "dry"), so a minimum
- * both calibrates how greedy the rule is and is how a short word that has to
+ * The minimum (4) matters more than it looks. Short words are very often in
+ * alphabetical order by chance ("any", "bet", "cow", "dry"), so it both
+ * calibrates how greedy the rule is and is how a short word that has to
  * survive is let through.
  */
 final class AlphabeticalOrderRule extends SpellingRule
 {
-    public function __construct(private ?int $minLength = null)
-    {
-    }
-
     public function failsWord(string $word): bool
     {
-        if ($this->minLength !== null && strlen($word) < $this->minLength) {
+        if (strlen($word) < 4) {
             return false;
         }
         return WordTags::isInAlphabeticalOrder($word);
@@ -37,7 +33,6 @@ final class AlphabeticalOrderRule extends SpellingRule
 
     public function describe(): string
     {
-        return 'words with their letters in alphabetical order'
-            . ($this->minLength === null ? '' : ", {$this->minLength}+ letters only");
+        return 'words with their letters in alphabetical order, 4+ letters only';
     }
 }

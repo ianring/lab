@@ -29,7 +29,7 @@ interface RuleInterface
      *
      * This is for whoever is working ON the book, not reading it: bin/check.php and
      * bin/solve.php print it so a chain of a dozen rules is legible at a glance,
-     * without cross-referencing config/chain.php. The reader-facing wording is the
+     * without cross-referencing config/chain.json. The reader-facing wording is the
      * step's own 'rule_text', which is a full instruction and says more.
      *
      * Phrase it as the thing being removed, so it reads after "crosses out".

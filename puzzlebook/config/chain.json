@@ -1,0 +1,213 @@
+{
+    "steps": [
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "PalindromeRule"},
+            "rule_text": "Cross out every word that reads the same forwards and backwards.",
+            "note": "The scarcest rule in the book: English has only on the order of a hundred palindromes of 3-10 letters, however big the book gets.",
+            "construction": {"keep_fraction": 0.994}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "UsesOnlyLettersRule"},
+            "rule_text": "Cross out every word spelled using only these letters: B C D E H I K O X. (They are the capitals that look the same reflected top to bottom.)",
+            "note": "258 matching words in the list -- a hunt, and it has to run early or the later rules will have eaten most of them.",
+            "construction": {"keep_fraction": 0.985}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "CornerContainsLetterRule"},
+            "rule_text": "Look at the four corners of every page (top-left, top-right, bottom-left, bottom-right). Cross out any corner word containing the letter E.",
+            "note": "New rule, added near the beginning per Ian's request -- a fixed geometric count (4/page: 120 at 30 pages, 400 at 100), so it scales with the book automatically and needs no density tuning the way a keep_fraction rule normally does. PLACEHOLDER keep_fraction (0.983, aiming for roughly half the book's corners to deliberately contain E), unmeasured. Run bin/check.php before trusting it. Corners NOT claimed here are protected by a NoUnplannedCornerLetter invariant so no later rule's ordinary filler can accidentally land an E there.",
+            "construction": {"keep_fraction": 0.983}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "AlphabetAdjacentEndsRule"},
+            "rule_text": "Cross out every word of FIVE OR SIX LETTERS whose first letter and last letter are next-door neighbours in the alphabet, in that order (A then B, B then C, and so on).",
+            "note": "Moved from much later in the chain, where the pool had already been thinned to 756 of its 1,064 unrestricted matches -- bin/check.php found demand (1,064 at keep_fraction 0.88) exceeding that. Here, right after the two rules that barely touch anything, it sees nearly the full catch. keep_fraction recalculated from the real cascade at this new position (pool ~11,749 entering this step) to cap demand around 646 -- comfortably under both the available count and Ian's 700-per-rule ceiling. Still worth confirming with bin/check.php.",
+            "construction": {"keep_fraction": 0.945}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "RepeatedLetterRule"},
+            "rule_text": "Cross out every word in which the SAME consonant appears four or more times (ASSASSIN has four S).",
+            "note": "~209 in the list.",
+            "construction": {"keep_fraction": 0.987}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "AlphabeticalOrderRule"},
+            "rule_text": "Cross out every word of FOUR OR MORE letters whose letters run in alphabetical order from first to last, never going backwards (ALMOST, BEGIN, CHIMP). A repeated letter does not count as going backwards, so BLESS and ALLOT go too. Words of three letters or fewer are safe.",
+            "note": "Four letters and up: short words land in alphabetical order by chance constantly, and the minimum is also what lets the revealed word \"any\" through. Measured at 365 available.",
+            "construction": {"keep_fraction": 0.975}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "LetterCountRule"},
+            "rule_text": "Cross out every word containing three or more of the letter I, wherever they sit (INITIAL, IGNITION, INVITING).",
+            "construction": {"keep_fraction": 0.95}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "ConsonantRunRule"},
+            "rule_text": "Cross out every word with four consonants in a row (Y does not count as a vowel).",
+            "note": "Four, not three: the (currently inactive) reveal spells out the literal word \"knight\", whose \"ght\" is a run of exactly three. keep_fraction lowered from 0.97: bin/check.php showed this rule's real supply (7,712 matches) at 85x its old demand (91), while VowelRunRule (the chain's absorber) was stuck taking 44.7% of the book. Shifting load here is safe headroom, not a guess.",
+            "construction": {"keep_fraction": 0.87}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "RepeatedBlockRule"},
+            "rule_text": "Cross out every word made of the same group of two or more letters repeated (DADA, TOMTOM, PERIPERI).",
+            "note": "PLACEHOLDER keep_fraction -- reduplicated words like this are rare, but the real count hasn't been measured against this book's dictionary yet. Run bin/check.php before trusting this number.",
+            "construction": {"keep_fraction": 0.995}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "ContainsZRule"},
+            "rule_text": "Cross out every word containing the letter Z.",
+            "note": "keep_fraction lowered from 0.93: real supply (3,424 matches) was 17x old demand (206), room to shift load off VowelRunRule, the chain's overloaded absorber.",
+            "construction": {"keep_fraction": 0.89}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "DoubleEFewVowelsRule"},
+            "rule_text": "Cross out every word containing a double E that has at most one OTHER vowel besides the pair itself (COFFEE qualifies; FOURTEEN does not -- it also has O and U).",
+            "note": "Replaces plain \"contains a double E\" (ContainsDoubleERule, which matched too broadly). PLACEHOLDER keep_fraction, carried over unchanged from the old, looser rule -- the real catch here is smaller, so this will likely need to rise. Run bin/check.php before trusting it.",
+            "construction": {"keep_fraction": 0.92}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "BothEndPairsInSetRule"},
+            "rule_text": "Cross out every word whose first TWO letters and last TWO letters are ALL on the top row of a keyboard: Q W E R T Y U I O P. Any length qualifies.",
+            "note": "Replaces BothEndsInSetRule (single letter at each end, capped length) with a tighter four-letter check and no length cap. Measured with bin/check.php: real supply (5,399 matches) was 43x the 0.95 placeholder's demand (126), so keep_fraction was lowered to shift load off VowelRunRule, the chain's overloaded absorber.",
+            "construction": {"keep_fraction": 0.84}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "StartsWithTwoVowelsRule"},
+            "rule_text": "Cross out every word starting with two vowels in a row (OASIS, EASIER, AUTUMN).",
+            "note": "Replaces VowelRunRule (\"two vowels in a row anywhere\"), which was a superset of DoubleEFewVowelsRule's catch -- any double-E word has two adjacent vowels by definition, the same supersedes-an-earlier-rule problem documented for the consonant_vowel_pattern/reversal rules elsewhere in config/README.md. Checking only the word's START avoids the overlap. bin/check.php found demand (1,854 at keep_fraction 0.75) well past both the available count (1,750) and Ian's 700-per-rule ceiling -- not starved, just too greedy. keep_fraction raised to cap demand around 677 at this step's new cascade position (pool ~7,963 after AlphabetAdjacentEndsRule moved earlier); the ~1,177 fewer cells removed here flow forward and land on MatchingNeighbourEndsRule (the absorber) unless redistributed further -- check whether that pushes IT over 700 next.",
+            "construction": {"keep_fraction": 0.915}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "ThreeDistinctLettersRule"},
+            "rule_text": "Cross out every word of SIX LETTERS OR MORE spelled using three or fewer DISTINCT letters, however often each one repeats (REFERRER re-uses R, E, F; BANANA re-uses B, A, N).",
+            "note": "New rule. PLACEHOLDER keep_fraction -- likely to be genuinely scarce (few words repeat so few distinct letters at this length), unmeasured against this book's dictionary. Run bin/check.php before trusting it.",
+            "construction": {"keep_fraction": 0.995}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "FourConsonantsOneVowelRule"},
+            "rule_text": "Cross out every FIVE-letter word made of four consonants and exactly one vowel (TRUST, CRISP, GHOST).",
+            "note": "New rule. PLACEHOLDER keep_fraction, unmeasured against this book's dictionary. Run bin/check.php before trusting it.",
+            "construction": {"keep_fraction": 0.85}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "WordLength10Rule"},
+            "rule_text": "Cross out every remaining word of exactly TEN letters.",
+            "note": "New rule -- nothing else in this simplified chain specifically targets length 10 (length_by_page, which used to cycle through it, was pulled earlier this session along with the rest of the positional family). Measured with bin/check.php: real supply (22,388 matches) was 300x the 0.96 placeholder's demand (74), the single biggest headroom in the chain, so keep_fraction was lowered substantially to shift load off VowelRunRule, the chain's overloaded absorber.",
+            "construction": {"keep_fraction": 0.79}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "AnagramPairOnPageRule"},
+            "rule_text": "On every page, find every pair of words that are both still standing and are anagrams of each other (LISTEN and SILENT, or DUSTY and STUDY). Cross out both words of the pair.",
+            "note": "Kept over SameVowelsOnPageRule, which was pulled: the two competed, each's accidental catch sometimes overlapping the other's deliberately-placed word (a cross-rule invariant collision, since fixed generically -- see PageSignaturePairRule::construct()) -- Ian preferred anagram pairs once it came to picking one. PLACEHOLDER keep_fraction, deliberately modest. Run bin/check.php before raising it.",
+            "construction": {"keep_fraction": 0.97, "pairs": true}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "SameEndingVerticalPairRule"},
+            "rule_text": "Going down each column, find every pair of vertically adjacent words that are both still standing, where both words end in the same letter. Cross out both words of the pair.",
+            "note": "New rule and new mechanism -- the vertical sibling of MatchingNeighbourEndsRule. Rewritten to pick two real words sharing a last letter up front (reserved, validated, placed as literals) rather than resolving the second word at fill time -- the fill-time version was how an orphaned half slipped through when several pair rules ran together. Uses the new Canvas::freeVerticalPairs(). PLACEHOLDER keep_fraction, deliberately modest first run. Run bin/check.php before raising it.",
+            "construction": {"keep_fraction": 0.97, "pairs": true}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "MatchingNeighbourEndsRule"},
+            "rule_text": "Going along each row, find every pair of side-by-side words that are both still standing, where the left word ends in the same letter the right word starts with. Cross out both words of the pair.",
+            "note": "Reinstated as a trial, per Ian's intuition that splitting a pair into a plain left cell plus a letter-dependent right cell might hide a problem. That intuition was right (fixed: now picks two real words up front, reserved, placed as literals). Capped to a small keep_fraction like its sibling pair rules, rather than left as the absorber -- EVERY literal-placed pair carries a small risk of colliding with an unrelated neighbour once actually placed (the same risk AnagramPairOnPageRule always had), and with it absorbing an unbounded leftover, SOME collision across hundreds of pairs became near-certain on every single attempt, discarding the whole thing each time. VowelRunRule (below) is the absorber now -- ordinary filler has a real fallback (try another dictionary word) that a committed literal pair doesn't.",
+            "construction": {"keep_fraction": 0.97, "pairs": true}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "LongShortNeighbourRule"},
+            "rule_text": "Look for a 9-letter word that is adjacent (up, down, left, right, or diagonal) to a 3-letter word. Cross out both. If a word has more than one qualifying neighbour, all of them are crossed out, not just one pair.",
+            "note": "New rule, Ian's second brainstormed addition. Unlike the other pair rules, needs no SPECIFIC matching word -- any 9-letter and any 3-letter word qualify -- so both halves are ordinary cells with full dictionary fallback, not a fragile reserved pair. Guarded (construction-time check + NoLengthAdjacentToOpposingLiteral invariant) against accidentally orphaning AnagramPairOnPageRule/SameEndingVerticalPairRule/MatchingNeighbourEndsRule's own fragile pairs; deliberately does NOT guard against overlapping its own matches, since clustering is the explicitly wanted behaviour here. PLACEHOLDER keep_fraction (0.97, matching its sibling pair rules' tier), unmeasured. Run bin/check.php before trusting it.",
+            "construction": {"keep_fraction": 0.97, "pairs": true}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "DoubledConsonantRule"},
+            "rule_text": "Cross out every word with the same consonant letter twice in a row (HAPPY, LETTER, SUMMER, PUZZLE).",
+            "note": "New rule, added to take load off VowelRunRule (the absorber): density-correct target is ~7 matches/page (700 cells at 100 pages, per Ian's own calibration), but VowelRunRule alone was absorbing 33/page even after round-2 tuning. Doubled consonants are one of English's most common patterns and barely overlap RepeatedLetterRule (needs 4+ anywhere, not 2 adjacent) or VowelRunRule (consonants only, vowels excluded). PLACEHOLDER keep_fraction (0.73, hand-traced to land ~274 cells), unmeasured. Run bin/check.php before trusting it.",
+            "construction": {"keep_fraction": 0.73}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "VowelBothEndsRule"},
+            "rule_text": "Cross out every word that both starts and ends with a vowel, not necessarily the same one (IDEA, AORTA, AGENDA, UMBRELLA).",
+            "note": "Third of three new rules added together to bring VowelRunRule's absorbed share down from ~33/page toward the ~7/page density target. Distinct from StartsWithTwoVowelsRule (checks the first TWO letters, nothing about the last) and from AlphabetAdjacentEndsRule (alphabet adjacency, not vowel-ness). PLACEHOLDER keep_fraction (0.52, hand-traced to land ~228 cells), unmeasured. Run bin/check.php before trusting it.",
+            "construction": {"keep_fraction": 0.52}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "VowelRunRule"},
+            "rule_text": "Cross out every word of NINE LETTERS OR FEWER with two vowels side by side (Y does not count as a vowel), as in RAIN, HOUSE or QUIET.",
+            "note": "Reinstated as the chain's absorber (the last step with a keep_fraction) -- removed earlier this session for being a superset of DoubleEFewVowelsRule's catch, but that concern was about wasting a MID-chain rule's own turn on redundant matches. As the deliberate last-resort catch-all, a broad catch is exactly the point: ordinary ambiguous filler, with real fallback if one candidate word doesn't fit a cell, is what should be absorbing the unbounded leftover -- not a committed literal pair.",
+            "construction": {"keep_fraction": 0.60}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "rule": {"type": "SurroundedCaptureRule"},
+            "rule_text": "Look at every surviving word on a page, not touching any edge of the page. If all 8 words around it (up, down, left, right, and the four diagonals) have already been crossed out, cross it out too -- a captured stone, as in the game Go.",
+            "note": "EXPERIMENTAL. construct() claims no cells at all -- there is no deliberate \"guarantee this ring is dead\" construction step, unlike every pair rule in this book. What (if anything) gets captured is purely emergent from whatever the earlier rules already eliminated, which is also why it sits this late: enough of the book has to already be dead for an 8-dead-neighbour ring to occur at all. bin/check.php has nothing useful to measure here -- there is no cardinality to report. May remove nothing; may remove a lot; genuinely unknown until a real build runs.",
+            "construction": {"derived": true}
+        },
+        {
+            "kind": "eliminate",
+            "printed": false,
+            "rule": {"type": "DecoyLength7Rule"},
+            "rule_text": "Several seven-letter words are held back here on purpose, to be cleared by the final step below.",
+            "note": "Holds back a handful of seven-letter words with no adjacency or covering logic at all -- just an ordinary flat claim on free cells, shaped to survive and then be swept by the final step. Replaces the reveal + knight's-move finale (see config/README.md for why those are currently out). See lib/Rules/DecoyLengthRule.php. Switched from length 5 to length 7 after length-5 ran out of surviving words to hand out during a real build -- check bin/check.php's \"by word length\" table before trusting this one either.",
+            "construction": {"derived": true}
+        },
+        {
+            "kind": "eliminate",
+            "printed": true,
+            "final": true,
+            "rule": {"type": "WordLength7Rule"},
+            "rule_text": "Cross out every seven-letter word. One word is now left standing: that is the answer.",
+            "note": "Clears the decoy words held back above -- and any other seven-letter word still standing, since nothing above this point spares them."
+        }
+    ],
+
+    "answer": "dragon"
+}

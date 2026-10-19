@@ -18,11 +18,11 @@ namespace Puzzlebook;
  * (knight's-move, matching-neighbour-ends) or at rank among survivors
  * (every-18th-word) can't be satisfied by picking a word in isolation --
  * ChainBuilder handles those by deciding which CELLS play which role first,
- * then using fillerStartingWith() (below) wherever a specific first letter
- * is required.
+ * then using fillerFromPoolStartingWith() (below) wherever a specific first
+ * letter is required.
  *
  * Every filler word also skips anything starting with the layout's
- * filler_excluded_initial (see config/layout.php), so the only words with
+ * filler_excluded_initial (see config/layout.json), so the only words with
  * that initial anywhere in the book are the ones placed on purpose as
  * knight's-move anchors.
  *
@@ -35,6 +35,18 @@ namespace Puzzlebook;
  * every time, and two different predicates can't fight over the same word
  * (whichever claims it first marks it used; the other's scan just skips
  * past it).
+ *
+ * fillerFromPool()/fillerFromPoolStartingWith() are the methods ChainBuilder
+ * actually calls now (see their docblocks for why fillerMatching() alone
+ * isn't safe at scale): the caller supplies its own candidate ARRAY --
+ * already filtered to whatever's true for every word in it regardless of
+ * which cell is asking -- and this class only ever remembers a FLOOR into
+ * that array: the point before which every word is confirmed USED. A word
+ * skipped because one particular cell's own quirk (its neighbours, what's
+ * already on its page) rejected it is never mistaken for used, so the floor
+ * never advances past it, and a different cell sharing the same label still
+ * gets to see it. Only "used" is permanent and global; everything else a
+ * predicate might reject is a property of ONE call, not of the word.
  */
 final class Dictionary
 {
@@ -49,11 +61,8 @@ final class Dictionary
     /** @var array<string,int> predicate label => how far into $pool its scan has reached */
     private array $cursors = [];
 
-    /** @var array<string,string[]> first letter => every pool word with that initial, in pool order */
-    private array $byFirstLetter = [];
-
-    /** @var array<string,int> "letter:label" => how far into that letter's bucket the scan has reached */
-    private array $firstLetterCursors = [];
+    /** @var array<string,int> label => how far into a CALLER-SUPPLIED pool array every word is confirmed used */
+    private array $poolFloors = [];
 
     private string $fillerExcludedInitial;
 
@@ -65,6 +74,36 @@ final class Dictionary
         }
         $this->pool = Rng::shuffle($lines, self::POOL_SHUFFLE_SEED);
         $this->fillerExcludedInitial = $fillerExcludedInitial;
+    }
+
+    /**
+     * Forget everything that has been handed out, ready for another build attempt.
+     *
+     * The pool itself is untouched -- reading and shuffling 133,000 words is the
+     * expensive part, and it gives the same answer every time. Only what's been USED
+     * and how far each scan has got need clearing. Before this existed a fresh
+     * Dictionary was built for every attempt, which re-read and re-shuffled the whole
+     * list each go.
+     */
+    public function reset(): void
+    {
+        $this->used = [];
+        $this->cursors = [];
+        $this->poolFloors = [];
+    }
+
+    /**
+     * The whole pool, in this Dictionary's own shuffled order -- so a caller building
+     * a filtered pool of its own (ChainBuilder, per prefix) keeps the same
+     * "spread across the alphabet" property as every other filler draw, instead of
+     * handing fillerFromPool() an array in the word list's original mostly-alphabetical
+     * order.
+     *
+     * @return string[]
+     */
+    public function rawPool(): array
+    {
+        return $this->pool;
     }
 
     /** Reserve a specific literal word (a clue or the answer). Errors if already placed. */
@@ -138,6 +177,80 @@ final class Dictionary
         );
     }
 
+    /**
+     * An unused word from $pool for which $extraPredicate is true -- the fix for a bug
+     * that's hit this project three times under fillerMatching(): a cell's own quirk
+     * (its left/right neighbours, what's already on its page) makes $extraPredicate
+     * reject a word that's perfectly fine for a DIFFERENT cell sharing the same $label,
+     * and a cursor that advances past every rejection -- not just used words -- then
+     * hides that word from every later cell forever, even though it was never actually
+     * used by anyone.
+     *
+     * The fix: $this->poolFloors[$label] only ever advances past words this call
+     * confirms are USED (checked fresh every call, since "used" only grows and is global
+     * -- true for every label, not just this one). A word $extraPredicate rejects is
+     * left exactly where it was for the next call, which might have a different cell,
+     * different neighbours, a different page -- and so a different answer.
+     *
+     * $pool itself still has to be something every word in it is equally eligible for,
+     * independent of which cell is asking (ChainBuilder passes the words that survive a
+     * step's own prefix of spelling rules) -- anything that varies by CELL, not by
+     * WORD, belongs in $extraPredicate instead, never baked into $pool.
+     *
+     * $pool is NOT filtered for filler_excluded_initial here, deliberately: a letter-
+     * pinned pool (fillerFromPoolStartingWith()) may legitimately BE that excluded
+     * letter -- a knight's-move anchor is allowed to start with it on purpose. Whichever
+     * pool the caller builds has to already reflect whether the exclusion applies to it;
+     * this method only ever enforces "used", the one thing true for every pool alike.
+     *
+     * @param string[] $pool
+     * @param callable(string): bool $extraPredicate
+     */
+    public function fillerFromPool(array $pool, callable $extraPredicate, string $label): string
+    {
+        $n = count($pool);
+        $floor = $this->poolFloors[$label] ?? 0;
+        while ($floor < $n && isset($this->used[$pool[$floor]])) {
+            $floor++;
+        }
+
+        for ($pos = $floor; $pos < $n; $pos++) {
+            $word = $pool[$pos];
+            if (isset($this->used[$word])) {
+                continue;
+            }
+            if (!$extraPredicate($word)) {
+                continue;
+            }
+
+            $this->used[$word] = true;
+            $this->poolFloors[$label] = $floor;
+            return $word;
+        }
+
+        $this->poolFloors[$label] = $floor;
+        throw new \RuntimeException("Ran out of unused words matching '{$label}'.");
+    }
+
+    /**
+     * Same fix as fillerFromPool(), for the case where a specific first letter is also
+     * required (a knight's-move anchor, the right half of a matching-neighbour-ends
+     * pair): $pool is expected to already be restricted to that letter. $letter is
+     * folded into the floor's key, not just $label, because the letter a call pins can
+     * vary between cells that otherwise share the same $label (a pair rule's "right
+     * half" wants whatever letter ITS OWN left neighbour happened to end on) -- without
+     * the letter in the key, two such calls would read and advance the same floor as if
+     * they were offsets into the SAME array, when they were actually given two
+     * different ones.
+     *
+     * @param string[] $pool
+     * @param callable(string): bool $extraPredicate
+     */
+    public function fillerFromPoolStartingWith(string $letter, array $pool, callable $extraPredicate, string $label): string
+    {
+        return $this->fillerFromPool($pool, $extraPredicate, $letter . ':' . $label);
+    }
+
     /** An unused palindrome -- dies at the "crosses out palindromes" rule. */
     public function fillerPalindrome(): string
     {
@@ -151,65 +264,5 @@ final class Dictionary
             static fn (string $w): bool => !WordTags::isPalindrome($w) && WordTags::hasConsonantRun($w, 3),
             'consonant_run'
         );
-    }
-
-    /**
-     * An unused word whose first letter is exactly $letter, and for which
-     * $predicate is also true. Needed wherever a required first letter
-     * varies from call to call (the right half of a matching-neighbour-ends
-     * pair, a knight's-move anchor) -- fillerMatching()'s single scan
-     * position per label doesn't work there, because a word list sorted
-     * once can run past every remaining example of a rare letter before a
-     * later call asks for it. This keeps one scan position per
-     * letter-and-predicate instead, so each letter's own supply is used in
-     * order regardless of what else has been requested in between.
-     *
-     * $label distinguishes DIFFERENT predicates asking for the SAME letter
-     * (anchors try one predicate per spelling step against a single fixed
-     * initial). Without it, one predicate running its letter's bucket dry
-     * would strand every later caller using a different predicate on that
-     * same letter, even though plenty of matching words remained.
-     *
-     * Unlike fillerMatching(), this does not apply filler_excluded_initial
-     * -- the caller is asking for a specific letter on purpose (including
-     * 'k', for anchors), so excluding it here would be self-defeating.
-     *
-     * @param callable(string): bool $predicate
-     */
-    public function fillerStartingWith(string $letter, callable $predicate, string $label = ''): string
-    {
-        if (!isset($this->byFirstLetter[$letter])) {
-            $bucket = [];
-            foreach ($this->pool as $word) {
-                if ($word[0] === $letter) {
-                    $bucket[] = $word;
-                }
-            }
-            $this->byFirstLetter[$letter] = $bucket;
-        }
-
-        $cursorKey = $letter . ':' . $label;
-        $bucket = $this->byFirstLetter[$letter];
-        $pos = $this->firstLetterCursors[$cursorKey] ?? 0;
-        $n = count($bucket);
-
-        while ($pos < $n) {
-            $word = $bucket[$pos];
-            $pos++;
-
-            if (isset($this->used[$word])) {
-                continue;
-            }
-            if (!$predicate($word)) {
-                continue;
-            }
-
-            $this->used[$word] = true;
-            $this->firstLetterCursors[$cursorKey] = $pos;
-            return $word;
-        }
-
-        $this->firstLetterCursors[$cursorKey] = $pos;
-        throw new \RuntimeException("Ran out of unused words starting with '{$letter}'.");
     }
 }

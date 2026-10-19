@@ -16,7 +16,7 @@ use Puzzlebook\WordTags;
  * This reads the neighbour's first letter whether or not the neighbour has
  * been crossed out, which the book no longer permits: a reader using a
  * marker can't read an eliminated word at all, so the rule would be
- * unsolvable for them (see convention 3 in config/chain.php). It was written
+ * unsolvable for them (see convention 3 in config/README.md). It was written
  * before that constraint was understood, and its whole construction scheme
  * depended on anchors that die early and are read anyway.
  *
@@ -25,10 +25,11 @@ use Puzzlebook\WordTags;
  * filler that dies on schedule. KnightAdjacentSurvivingLengthRule is the
  * version that gets this right, and is what the finale uses.
  */
-final class KnightAdjacentInitialRule implements RuleInterface
+/** No card yet -- subclass with real initials to add one (if revived, see the docblock above). */
+abstract class KnightAdjacentInitialRule implements RuleInterface
 {
     /** @param string[] $initials */
-    public function __construct(private array $initials)
+    protected function __construct(private array $initials)
     {
     }
 

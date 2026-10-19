@@ -7,37 +7,35 @@ namespace Puzzlebook\Rules;
 use Puzzlebook\WordTags;
 
 /**
- * Cross out every word whose first AND last letter both come from $letters --
- * optionally only when the word is no longer than $maxLength.
- *
- * The set is given in config, so the same rule covers "both ends on the top
- * row of a keyboard" (QWERTYUIOP), "both ends a vowel", or any other group
- * worth naming in a printed instruction. Nothing here cares what the group
- * means; that's the rule_text's job.
+ * Cross out every word of four to six letters whose first AND last letter
+ * both sit on the top row of a keyboard (Q W E R T Y U I O P).
  *
  * Needing both ends in a ten-letter set still matches a sizeable share of
- * any dictionary, which is what makes this useful for thinning a large book.
- * $maxLength reins it in -- and is also how a long word that has to survive
- * (a word the reveal spells out, say) is let through.
+ * any dictionary -- unrestricted, 2,342 words -- which is what makes this
+ * useful for thinning a large book, but too loose a catch for its spot in
+ * the chain. The length band narrows it without changing what the rule is
+ * actually about. The upper end is also what lets the (currently inactive)
+ * revealed word "eliminate" through: nine letters, well above the cap, so
+ * unrestricted this would remove it.
  */
 final class BothEndsInSetRule extends SpellingRule
 {
-    /** @param string[] $letters */
-    public function __construct(private array $letters, private ?int $maxLength = null)
-    {
-    }
+    private const LETTERS = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'];
+    private const MIN_LENGTH = 4;
+    private const MAX_LENGTH = 6;
 
     public function failsWord(string $word): bool
     {
-        if ($this->maxLength !== null && strlen($word) > $this->maxLength) {
+        $length = strlen($word);
+        if ($length < self::MIN_LENGTH || $length > self::MAX_LENGTH) {
             return false;
         }
-        return WordTags::bothEndsIn($word, $this->letters);
+        return WordTags::bothEndsIn($word, self::LETTERS);
     }
 
     public function describe(): string
     {
-        return 'words with both ends in ' . strtoupper(implode('', $this->letters))
-            . ($this->maxLength === null ? '' : ", max {$this->maxLength} letters");
+        return 'words of ' . self::MIN_LENGTH . '-' . self::MAX_LENGTH . ' letters with both ends in '
+            . strtoupper(implode('', self::LETTERS));
     }
 }

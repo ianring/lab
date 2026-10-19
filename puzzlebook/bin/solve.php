@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../lib/bootstrap.php';
 
+use Puzzlebook\JsonConfig;
 use Puzzlebook\Solver;
 
 $root = dirname(__DIR__);
@@ -16,7 +17,8 @@ if (!is_file($bookPath)) {
 }
 
 $book = json_decode(file_get_contents($bookPath), true);
-$chain = require $root . '/config/chain.php';
+$chain = JsonConfig::load($root . '/config/chain.json');
+$chain = \Puzzlebook\ChainPlan::numberSteps($chain);
 
 $result = Solver::run($book, $chain);
 

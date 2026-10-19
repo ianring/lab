@@ -14,11 +14,16 @@ use Puzzlebook\WordTags;
  * one. "Second letter is A" matches a large slice of any dictionary; "SIX
  * LETTER word whose second letter is A" matches a small, calibrated one.
  * Leave $length null for no restriction.
+ *
+ * Shared base for a family of cards, one per position/letters/length
+ * combination -- see SecondLetterARule for the shape of a concrete one (kept
+ * but not in any active library: it starved its own word pool on real
+ * builds, see config/README.md).
  */
-final class LetterAtPositionRule extends SpellingRule
+abstract class LetterAtPositionRule extends SpellingRule
 {
     /** @param string[] $matches */
-    public function __construct(private int $position, private array $matches, private ?int $length = null)
+    protected function __construct(private int $position, private array $matches, private ?int $length = null)
     {
     }
 
@@ -29,6 +34,11 @@ final class LetterAtPositionRule extends SpellingRule
         }
         $letter = WordTags::letterAt($word, $this->position);
         return $letter !== null && in_array($letter, $this->matches, true);
+    }
+
+    public function fixedLength(): ?int
+    {
+        return $this->length;
     }
 
     public function describe(): string

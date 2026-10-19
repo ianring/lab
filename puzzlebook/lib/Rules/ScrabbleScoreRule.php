@@ -20,9 +20,10 @@ use Puzzlebook\WordTags;
  * big the slice is, which is handy when a word you need to survive happens to
  * land on the wrong one.
  */
-final class ScrabbleScoreRule extends SpellingRule
+/** No card yet -- subclass with real multipleOf/remainder values to add one. */
+abstract class ScrabbleScoreRule extends SpellingRule
 {
-    public function __construct(private int $multipleOf, private int $remainder = 0)
+    protected function __construct(private int $multipleOf, private int $remainder = 0)
     {
     }
 

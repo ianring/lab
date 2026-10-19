@@ -14,9 +14,8 @@ use Puzzlebook\Grid;
  * On every page: cross out the word in the TARGET cell, but only if the word
  * in the TRIGGER cell has already been crossed out.
  *
- * Both cells are given as [row, col], and -1 means "the last one", so the
- * top-left corner is [0, 0] and the top-right is [0, -1]. The default
- * configuration is exactly that pair.
+ * Trigger is the top-left corner, target is the top-right -- cells are given
+ * as [row, col], and -1 means "the last one", so [0, 0] and [0, -1].
  *
  * This is a different SHAPE of rule from everything else in the book. A
  * spelling rule looks at a word's letters; the pair and knight's-move rules
@@ -35,27 +34,23 @@ use Puzzlebook\Grid;
  */
 final class ConditionalCellRule implements RuleInterface, ConstructsCells
 {
-    /**
-     * @param array{0:int,1:int} $trigger [row, col]; -1 means the last row/column
-     * @param array{0:int,1:int} $target  [row, col]; -1 means the last row/column
-     */
-    public function __construct(private array $trigger = [0, 0], private array $target = [0, -1])
-    {
-    }
+    /** @var array{0:int,1:int} [row, col]; -1 means the last row/column */
+    private const TRIGGER = [0, 0];
+    /** @var array{0:int,1:int} [row, col]; -1 means the last row/column */
+    private const TARGET = [0, -1];
 
     public function apply(array $words, Grid $grid, array $keep): array
     {
-        // Read from a snapshot so the outcome can't depend on which page is
-        // processed first -- the same discipline as the knight's-move rule.
-        $keepBefore = $keep;
-
+        // No snapshot needed: this rule reads the trigger cell and writes the target
+        // cell, and never the other way round, so it can't affect its own inputs. A
+        // reader working page by page gets the same answer.
         for ($page = 0; $page < $grid->pages; $page++) {
-            $triggerCell = $this->resolve($grid, $page, $this->trigger);
-            $targetCell = $this->resolve($grid, $page, $this->target);
+            $triggerCell = $this->resolve($grid, $page, self::TRIGGER);
+            $targetCell = $this->resolve($grid, $page, self::TARGET);
             if ($triggerCell === $targetCell) {
                 continue;
             }
-            if (!$keepBefore[$triggerCell]) {
+            if (!$keep[$triggerCell]) {
                 $keep[$targetCell] = false;
             }
         }
@@ -93,8 +88,8 @@ final class ConditionalCellRule implements RuleInterface, ConstructsCells
         $firedOn = 0;
 
         for ($page = 0; $page < $grid->pages; $page++) {
-            $triggerCell = $this->resolve($grid, $page, $this->trigger);
-            $targetCell = $this->resolve($grid, $page, $this->target);
+            $triggerCell = $this->resolve($grid, $page, self::TRIGGER);
+            $targetCell = $this->resolve($grid, $page, self::TARGET);
 
             if ($triggerCell === $targetCell) {
                 continue;
@@ -132,8 +127,8 @@ final class ConditionalCellRule implements RuleInterface, ConstructsCells
 
     public function describe(): string
     {
-        return 'the ' . $this->cellName($this->target) . ' word on a page, when the '
-            . $this->cellName($this->trigger) . ' one is already crossed out';
+        return 'the ' . $this->cellName(self::TARGET) . ' word on a page, when the '
+            . $this->cellName(self::TRIGGER) . ' one is already crossed out';
     }
 
     /** @param array{0:int,1:int} $cell */

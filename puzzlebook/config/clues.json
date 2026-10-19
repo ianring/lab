@@ -1,0 +1,124 @@
+{
+    "spelling": [
+        {
+            "rule": {"type": "PalindromeRule"},
+            "rule_text": "Cross out every word that reads the same forwards and backwards."
+        },
+        {
+            "rule": {"type": "UsesOnlyLettersRule"},
+            "rule_text": "Cross out every word spelled using only these letters: B C D E H I K O X. (They are the capitals that look the same reflected top to bottom.)"
+        },
+        {
+            "rule": {"type": "CornerContainsLetterRule"},
+            "rule_text": "Look at the four corners of every page (top-left, top-right, bottom-left, bottom-right). Cross out any corner word containing the letter E."
+        },
+        {
+            "rule": {"type": "AlphabetAdjacentEndsRule"},
+            "rule_text": "Cross out every word of FIVE OR SIX LETTERS whose first letter and last letter are next-door neighbours in the alphabet, in that order (A then B, B then C, and so on)."
+        },
+        {
+            "rule": {"type": "RepeatedLetterRule"},
+            "rule_text": "Cross out every word in which the SAME consonant appears four or more times (ASSASSIN has four S)."
+        },
+        {
+            "rule": {"type": "RepeatedBlockRule"},
+            "rule_text": "Cross out every word made of the same group of two or more letters repeated (DADA, TOMTOM, PERIPERI)."
+        },
+        {
+            "rule": {"type": "AlphabeticalOrderRule"},
+            "rule_text": "Cross out every word of FOUR OR MORE letters whose letters run in alphabetical order from first to last, never going backwards (ALMOST, BEGIN, CHIMP). A repeated letter does not count as going backwards, so BLESS and ALLOT go too. Words of three letters or fewer are safe."
+        },
+        {
+            "rule": {"type": "LetterCountRule"},
+            "rule_text": "Cross out every word containing three or more of the letter I, wherever they sit (INITIAL, IGNITION, INVITING)."
+        },
+        {
+            "rule": {"type": "ConsonantRunRule"},
+            "rule_text": "Cross out every word with four consonants in a row (Y does not count as a vowel)."
+        },
+        {
+            "rule": {"type": "ContainsZRule"},
+            "rule_text": "Cross out every word containing the letter Z."
+        },
+        {
+            "rule": {"type": "DoubleEFewVowelsRule"},
+            "rule_text": "Cross out every word containing a double E that has at most one OTHER vowel besides the pair itself (COFFEE qualifies; FOURTEEN does not -- it also has O and U)."
+        },
+        {
+            "rule": {"type": "BothEndPairsInSetRule"},
+            "rule_text": "Cross out every word whose first TWO letters and last TWO letters are ALL on the top row of a keyboard: Q W E R T Y U I O P. Any length qualifies."
+        },
+        {
+            "rule": {"type": "StartsWithTwoVowelsRule"},
+            "rule_text": "Cross out every word starting with two vowels in a row (OASIS, EASIER, AUTUMN)."
+        },
+        {
+            "rule": {"type": "ThreeDistinctLettersRule"},
+            "rule_text": "Cross out every word of SIX LETTERS OR MORE spelled using three or fewer DISTINCT letters, however often each one repeats (REFERRER re-uses R, E, F; BANANA re-uses B, A, N)."
+        },
+        {
+            "rule": {"type": "FourConsonantsOneVowelRule"},
+            "rule_text": "Cross out every FIVE-letter word made of four consonants and exactly one vowel (TRUST, CRISP, GHOST)."
+        },
+        {
+            "rule": {"type": "WordLength10Rule"},
+            "rule_text": "Cross out every remaining word of exactly TEN letters."
+        },
+        {
+            "rule": {"type": "DoubledConsonantRule"},
+            "rule_text": "Cross out every word with the same consonant letter twice in a row (HAPPY, LETTER, SUMMER, PUZZLE)."
+        },
+        {
+            "rule": {"type": "VowelBothEndsRule"},
+            "rule_text": "Cross out every word that both starts and ends with a vowel, not necessarily the same one (IDEA, AORTA, AGENDA, UMBRELLA)."
+        },
+        {
+            "rule": {"type": "VowelRunRule"},
+            "rule_text": "Cross out every word of SIX LETTERS OR FEWER with two vowels side by side (Y does not count as a vowel), as in RAIN, HOUSE or QUIET."
+        }
+    ],
+
+    "positional": [
+        {
+            "rule": {"type": "AnagramPairOnPageRule"},
+            "rule_text": "On every page, find every pair of words that are both still standing and are anagrams of each other (LISTEN and SILENT, or DUSTY and STUDY). Cross out both words of the pair.",
+            "construction": {"keep_fraction": 0.97, "pairs": true}
+        },
+        {
+            "rule": {"type": "SameEndingVerticalPairRule"},
+            "rule_text": "Going down each column, find every pair of vertically adjacent words that are both still standing, where both words end in the same letter. Cross out both words of the pair.",
+            "construction": {"keep_fraction": 0.97, "pairs": true}
+        },
+        {
+            "rule": {"type": "MatchingNeighbourEndsRule"},
+            "rule_text": "Going along each row, find every pair of side-by-side words that are both still standing, where the left word ends in the same letter the right word starts with. Cross out both words of the pair.",
+            "construction": {"keep_fraction": 0.97, "pairs": true}
+        },
+        {
+            "rule": {"type": "LongShortNeighbourRule"},
+            "rule_text": "Look for a 9-letter word that is adjacent (up, down, left, right, or diagonal) to a 3-letter word. Cross out both. If a word has more than one qualifying neighbour, all of them are crossed out, not just one pair.",
+            "construction": {"keep_fraction": 0.97, "pairs": true}
+        },
+        {
+            "rule": {"type": "SurroundedCaptureRule"},
+            "rule_text": "Look at every surviving word on a page, not touching any edge of the page. If all 8 words around it (up, down, left, right, and the four diagonals) have already been crossed out, cross it out too -- a captured stone, as in the game Go.",
+            "construction": {"derived": true}
+        }
+    ],
+
+    "finale": [
+        {
+            "printed": false,
+            "rule": {"type": "DecoyLength7Rule"},
+            "rule_text": "Several seven-letter words are held back here on purpose, to be cleared by the final step below.",
+            "construction": {"derived": true}
+        },
+        {
+            "final": true,
+            "rule": {"type": "WordLength7Rule"},
+            "rule_text": "Cross out every seven-letter word. One word is now left standing: that is the answer."
+        }
+    ],
+
+    "answer": "dragon"
+}

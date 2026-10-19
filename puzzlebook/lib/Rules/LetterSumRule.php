@@ -21,9 +21,17 @@ use Puzzlebook\WordTags;
  * prime until you've finished adding. The work is (words still standing) x
  * (one full addition each), so it belongs late, where few words remain.
  */
-final class LetterSumRule extends SpellingRule
+/** No card yet -- subclass with a real test/n/remainder combination to add one. */
+abstract class LetterSumRule extends SpellingRule
 {
-    public function __construct(private string $test = 'prime', private int $n = 0)
+    /**
+     * $remainder shifts WHICH slice of words the rule catches without changing how
+     * big the slice is. That is what makes this rule usable at all: "a multiple of
+     * 9" happens to hit POSITIONED (126) and CHESS (54), both of which the revealed
+     * phrase needs, while "leaves 2 when divided by 9" catches just as many words
+     * and misses every protected one.
+     */
+    protected function __construct(private string $test = 'prime', private int $n = 0, private int $remainder = 0)
     {
         if (!in_array($test, ['prime', 'multiple'], true)) {
             throw new \InvalidArgumentException("Letter-sum test '{$test}' isn't 'prime' or 'multiple'.");
@@ -38,13 +46,16 @@ final class LetterSumRule extends SpellingRule
         $sum = WordTags::letterSum($word);
         return $this->test === 'prime'
             ? WordTags::isPrime($sum)
-            : $sum % $this->n === 0;
+            : $sum % $this->n === $this->remainder;
     }
 
     public function describe(): string
     {
-        return $this->test === 'prime'
-            ? 'words whose A=1..Z=26 letter sum is prime'
-            : "words whose A=1..Z=26 letter sum is a multiple of {$this->n}";
+        if ($this->test === 'prime') {
+            return 'words whose A=1..Z=26 letter sum is prime';
+        }
+        return $this->remainder === 0
+            ? "words whose A=1..Z=26 letter sum is a multiple of {$this->n}"
+            : "words whose A=1..Z=26 letter sum leaves {$this->remainder} when divided by {$this->n}";
     }
 }

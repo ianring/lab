@@ -6,20 +6,22 @@ namespace Puzzlebook\Rules;
 
 use Puzzlebook\WordTags;
 
-/** Cross out every word with $length or more consonants in a row (Y is never a vowel). */
+/**
+ * Cross out every word with four or more consonants in a row (Y is never a
+ * vowel).
+ *
+ * Four, not three: the (currently inactive) reveal spells out the literal
+ * word "knight", whose "ght" is a run of exactly three.
+ */
 final class ConsonantRunRule extends SpellingRule
 {
-    public function __construct(private int $length)
-    {
-    }
-
     public function failsWord(string $word): bool
     {
-        return WordTags::hasConsonantRun($word, $this->length);
+        return WordTags::hasConsonantRun($word, 4);
     }
 
     public function describe(): string
     {
-        return "words with {$this->length}+ consonants in a row";
+        return 'words with 4+ consonants in a row';
     }
 }

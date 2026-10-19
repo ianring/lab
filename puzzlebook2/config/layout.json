@@ -1,0 +1,8 @@
+{
+    "grid": {
+        "pages": 100,
+        "rows": 20,
+        "cols": 6
+    },
+    "filler_excluded_initial": ""
+}

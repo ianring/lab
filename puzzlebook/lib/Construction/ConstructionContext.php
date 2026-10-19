@@ -29,7 +29,19 @@ final class ConstructionContext
     /** @var array<int, SpellingRule> step id => rule, for spelling rules running before this step */
     private array $earlierSpellingSteps;
 
-    /** @param array<int, SpellingRule> $earlierSpellingSteps */
+    /** @var string[] */
+    private array $wordPool;
+
+    private string $wordPoolHash;
+
+    /** @var array<int,string[]> prefix => words surviving the first that many spelling rules */
+    private array $prefixPools;
+
+    /**
+     * @param array<int, SpellingRule> $earlierSpellingSteps
+     * @param string[] $wordPool
+     * @param array<int,string[]> $prefixPools
+     */
     public function __construct(
         int $stepId,
         int $budget,
@@ -39,9 +51,15 @@ final class ConstructionContext
         ?SpellingRule $finalRule,
         int $targetSurvivors,
         int $seed,
-        array $earlierSpellingSteps = []
+        array $earlierSpellingSteps = [],
+        array $wordPool = [],
+        string $wordPoolHash = '',
+        array $prefixPools = []
     ) {
         $this->earlierSpellingSteps = $earlierSpellingSteps;
+        $this->wordPool = $wordPool;
+        $this->wordPoolHash = $wordPoolHash;
+        $this->prefixPools = $prefixPools;
         $this->stepId = $stepId;
         $this->budget = $budget;
         $this->spellingRulesBefore = $spellingRulesBefore;
@@ -114,5 +132,48 @@ final class ConstructionContext
     public function earlierSpellingSteps(): array
     {
         return $this->earlierSpellingSteps;
+    }
+
+    /**
+     * Every word the book can be built from.
+     *
+     * Most rules never need this -- they describe what they want and the builder
+     * finds it. It's here for rules that have to know what the dictionary CONTAINS
+     * before they can describe what they want: a rule pairing up anagrams has to
+     * require a first word that actually has an anagram available, and there's no
+     * way to express that as a property of the word alone.
+     *
+     * @return string[]
+     */
+    public function wordPool(): array
+    {
+        return $this->wordPool;
+    }
+
+    /**
+     * Words that survive every spelling rule before THIS step -- precomputed once per
+     * build/check run (see ChainBuilder::prefixPools()), not scanned fresh per step.
+     *
+     * For a rule that needs genuine PAIRS of words rather than just a shape -- two
+     * anagrams, a word hiding inside another -- this is what makes it possible to
+     * pick both halves of a pair up front, during construction, and know they're
+     * REALLY both available, rather than picking one and hoping a match for it is
+     * still around by the time fillWords() gets there.
+     *
+     * @return string[]
+     */
+    public function survivorsSoFar(): array
+    {
+        return $this->prefixPools[$this->spellingRulesBefore] ?? [];
+    }
+
+    /**
+     * A content hash of the word pool, computed once per build/check run rather than
+     * per step -- the cache key a rule uses to ask WordIndexCache for a dictionary-
+     * derived index it built on a previous run, instead of rebuilding from scratch.
+     */
+    public function wordPoolHash(): string
+    {
+        return $this->wordPoolHash;
     }
 }
