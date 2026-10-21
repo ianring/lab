@@ -1,8 +1,30 @@
 {
     "grid": {
         "pages": 100,
-        "rows": 20,
-        "cols": 6
+        "rows": 25,
+        "cols": 5
     },
-    "filler_excluded_initial": ""
+    "filler_excluded_initial": "",
+    "print": {
+        "trim_width_mm": 139.7,
+        "trim_height_mm": 215.9,
+        "margin_mm": 9.0,
+        "grid_font_pt": 9.5,
+        "text_font": {
+            "family": "PTSerif",
+            "dir": "fonts",
+            "regular": "PTSerif-Regular.php",
+            "bold": "PTSerif-Bold.php",
+            "italic": "PTSerif-Italic.php",
+            "web_stack": "'PT Serif', Georgia, serif"
+        },
+        "grid_font": {
+            "family": "CourierPrime",
+            "dir": "fonts",
+            "regular": "CourierPrime-Regular.php",
+            "bold": "CourierPrime-Bold.php",
+            "style": "",
+            "web_stack": "'Courier Prime', 'Courier New', monospace"
+        }
+    }
 }

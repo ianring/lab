@@ -37,4 +37,10 @@ final class DoubleEFewVowelsRule extends SpellingRuleBase
     {
         return 'words with a double E and at most ' . self::MAX_OTHER_VOWELS . ' other vowel';
     }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Cross out every word containing a double E that has zero or one OTHER vowel besides the pair itself (KNEE has no other vowels; COFFEE has one, the O; FOURTEEN is safe -- it also has O and U, which is too many).';
+    }
 }

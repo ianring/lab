@@ -35,7 +35,7 @@ use Puzzlebook2\Solver\Rng;
  * subsumed by this rule's globalConstraints() guard, which covers every
  * standing word -- literal or filler -- uniformly.
  */
-final class MatchingNeighbourEndsRule implements Rule
+final class MatchingNeighbourEndsRule implements Rule, \Puzzlebook2\Rules\RequiresAccurateProgress
 {
     use RuleIdentity;
 
@@ -171,5 +171,11 @@ final class MatchingNeighbourEndsRule implements Rule
     public function kind(): string
     {
         return 'eliminate';
+    }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Going along each row, find every pair of side-by-side words that are both still standing, where the left word ends in the same letter the right word starts with. Cross out both words of the pair.';
     }
 }

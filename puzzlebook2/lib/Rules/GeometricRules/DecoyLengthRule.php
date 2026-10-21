@@ -98,4 +98,10 @@ abstract class DecoyLengthRule implements Rule
     {
         return 'decoy';
     }
+
+    /** Never shown to the reader (printed: false) -- exists so exports are complete. */
+    public function ruleText(): string
+    {
+        return 'Several words are held back here on purpose, to be cleared by the final step below.';
+    }
 }

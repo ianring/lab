@@ -14,10 +14,10 @@ php bin/advise.php --apply   # apply them automatically -> config/chain.tuned.js
 php bin/build.php            # build + verify + write artifacts (--seed=N for a different book)
 
 sh print/install-libs.sh     # once: vendors FPDF into print/libs/ (no Composer)
-php print/render.php         # build/book.json -> build/book.pdf, mass-market trim
+php print/render.php         # build/book.json -> build/book.pdf, 5.25" x 7" trim
 ```
 
-The PDF is print-ready at 4.25" x 6.87" (108 x 175 mm): title page,
+The PDF is print-ready at 5.25" x 7" (133.35 x 177.8 mm): title page,
 how-it-works, the numbered rules (printed steps only -- the decoy step stays
 the engine's secret), then one page per book page of words.
 `--title="..."` / `--out=...` override the defaults.
@@ -31,10 +31,34 @@ step.
 Current performance baseline: the 60-page (7,200-cell) book builds in ~11s
 with zero backtracks and verifies end to end, answer `dragon`.
 
+## Design knobs — one place
+
+Everything about the book's physical shape lives in `config/layout.json`:
+
+```json
+{
+    "grid":  { "pages": 100, "rows": 20, "cols": 5 },
+    "print": { "trim_width_mm": 133.35, "trim_height_mm": 177.8,
+               "margin_mm": 9.0, "grid_font_pt": 9.0 }
+}
+```
+
+Edit any of them, then re-run: `php print/fit-wordlist.php` (refilters the
+dictionary for the new geometry) -> `php bin/build.php` -> `php
+print/render.php`. The renderer errors rather than ever shrinking below
+`grid_font_pt`.
+
+Reader-facing rule text lives on each Rule class (`ruleText()`), right
+beside the logic it describes — the ONE authoritative copy; `chain.json`
+carries no wording. Builds inject the text into the exported
+`build/chain.json` / `web/chain.json`, so the previewer and PDF read it
+from there. (Moving it there immediately caught a drifted text:
+VowelRunRule said "nine letters or fewer" while the code capped at six.)
+
 ## Layout
 
-- `config/` — `layout.json` (board size) + `chain.json` (the rule chain; same
-  format as v1).
+- `config/` — `layout.json` (board size + print design) + `chain.json` (the
+  rule chain: order, keep_fractions, notes — no wording).
 - `lib/Solver/` — the systematic assign/backtrack engine. Nothing in it knows
   any rule.
 - `lib/Rules/` — the clue library. A new spelling rule = `failsWord()` +

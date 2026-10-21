@@ -4,12 +4,13 @@
      browser falls back to a legacy 8-bit encoding and renders the UTF-8 bytes
      as mojibake -- the classic "âœ“" for "✓". -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dragon Hunt</title>
+<title>Eliminoid</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Courier+Prime:wght@400;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
 
 <style>
+
   :root {
     --paper: #eef0e8;
     --paper-raised: #f8f9f3;
@@ -294,14 +295,17 @@
 
   /* ---------- book pages ---------- */
 
-  /* A mass-market paperback page: 4.25 x 6.87 inches. Fixed size, nothing
-     computed -- at 8rem to the inch that's 34rem x 55rem, with a 3rem pad
-     for the 3/8" margin a book that size can afford. */
+  /* One sheet of the actual printed book. Size, margin and grid type all
+     come from book.json's "print" block (what print/render.php used), set
+     as CSS custom properties at load -- mm and pt units so the on-screen
+     page keeps the print trim's exact aspect ratio and relative type size
+     (at CSS's 96dpi mapping it is also physically life-size on most
+     screens). The fallbacks below match config/layout.json's defaults. */
   .page {
-    width: 34rem;
-    height: 55rem;
+    width: var(--trim-w, 133.35mm);
+    height: var(--trim-h, 177.8mm);
     flex: 0 0 auto;
-    padding: 3rem;
+    padding: var(--page-margin, 9mm);
     background: var(--sheet);
     color: var(--sheet-ink);
     border: 1px solid var(--sheet-edge);
@@ -310,18 +314,20 @@
     flex-direction: column;
   }
 
+  /* Matches the PDF's header band: bold caps, centred, same type as the grid. */
   .page-head {
     display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 0.6rem;
+    justify-content: center;
+    align-items: flex-start;
+    height: 6.5mm;
     flex: 0 0 auto;
   }
   .page-head h3 {
-    font-size: 0.6rem;
-    font-weight: 600;
-    color: var(--sheet-faint);
-    letter-spacing: 0.12em;
+    font-family: var(--text-font, Helvetica), Helvetica, Arial, sans-serif;
+    font-size: 9pt;
+    font-weight: 700;
+    color: var(--sheet-ink);
+    letter-spacing: 0;
     text-transform: uppercase;
   }
   /* Fills the rest of the sheet, so 20 rows land inside the bottom margin. */
@@ -331,7 +337,7 @@
     grid-auto-rows: 1fr;
     flex: 1 1 auto;
     min-height: 0;
-    column-gap: 0.25rem;
+    column-gap: 0;
   }
 
   .cell {
@@ -339,13 +345,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: "IBM Plex Mono", monospace;
-    /* 0.72rem is as large as 6 columns of up to 10 letters will go on a page
-       this narrow -- about 6.5pt in print, which is very small. See the note
-       in the README about trim size versus column count. */
-    font-size: 0.72rem;
+    /* Same face, size and case as the printed grid. */
+    font-family: var(--grid-font, monospace);
+    font-weight: var(--grid-weight, normal);
+    font-size: var(--grid-pt, 9pt);
     text-transform: uppercase;
-    letter-spacing: 0.01em;
+    letter-spacing: 0;
     text-align: center;
     color: var(--sheet-ink);
     line-height: 1.1;
@@ -448,7 +453,7 @@
     <div class="brand">
       <span class="brand-mark">🐉</span>
       <div class="brand-text">
-        <h1>Dragon Hunt</h1>
+        <h1>Eliminoid</h1>
         <p class="subtitle" id="subtitle">Watching the puzzlebook chain solve itself, one step at a time</p>
       </div>
     </div>
@@ -514,6 +519,22 @@ function resetState() {
   grid = loadedBook.grid;
   words = loadedBook.words;
   totalWords = grid.pages * grid.rows * grid.cols;
+
+  // The same design numbers print/render.php typeset with, exported into
+  // book.json by the build -- the preview page IS the printed page.
+  const printCfg = loadedBook.print || {};
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty("--trim-w", (printCfg.trim_width_mm ?? 133.35) + "mm");
+  rootStyle.setProperty("--trim-h", (printCfg.trim_height_mm ?? 177.8) + "mm");
+  rootStyle.setProperty("--page-margin", (printCfg.margin_mm ?? 9) + "mm");
+  rootStyle.setProperty("--grid-pt", (printCfg.grid_font_pt ?? 9) + "pt");
+  if (printCfg.grid_font && printCfg.grid_font.web_stack) {
+    rootStyle.setProperty("--grid-font", printCfg.grid_font.web_stack);
+    rootStyle.setProperty("--grid-weight", (printCfg.grid_font.style || "").includes("B") ? "bold" : "normal");
+  }
+  if (printCfg.text_font && printCfg.text_font.web_stack) {
+    rootStyle.setProperty("--text-font", printCfg.text_font.web_stack);
+  }
   CHAIN = loadedChain;
 
   // Rule wording comes from chain.json, which bin/build.php writes -- so an edit
@@ -557,7 +578,7 @@ function buildBookDom() {
 
     const head = document.createElement("div");
     head.className = "page-head";
-    head.innerHTML = `<h3>Page ${page + 1}</h3>`;
+    head.innerHTML = `<h3>PAGE ${page + 1} OF ${grid.pages}</h3>`;
     pageEl.appendChild(head);
 
     const gridEl = document.createElement("div");

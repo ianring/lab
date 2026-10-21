@@ -22,15 +22,55 @@ final class BookWriter
      * @param array{ok:bool, lines:string[], eliminated:array<int,string[]>} $verification
      * @return string[] paths written
      */
-    public static function write(string $root, FilledBoard $board, ChainPlan $plan, array $verification): array
+    /** @param array $print the layout.json "print" block -- exported into book.json so the web preview can render pages at the true trim, margin and grid font. */
+    public static function write(string $root, FilledBoard $board, ChainPlan $plan, array $verification, array $print = []): array
     {
         $spec = $board->spec();
         $book = [
             'grid' => ['pages' => $spec->pages, 'rows' => $spec->rows, 'cols' => $spec->cols],
             'words' => array_values($board->allWords()),
         ];
+        if ($print !== []) {
+            $book['print'] = $print;
+        }
 
+        // rule_text lives on each Rule class (the one authoritative copy,
+        // beside the logic it describes) -- injected into the export here
+        // so web/chain.json keeps the exact contract the previewer reads.
+        // The final step gets its positional closing line appended: that
+        // sentence belongs to the chain's shape, not to the rule.
         $chainForExport = $plan->chainConfig();
+        $total = count($board->allWords());
+        foreach ($plan->rules() as $pos => $rule) {
+            $text = $rule->ruleText();
+            if ($pos === $plan->finalPos()) {
+                $text .= ' One word is now left standing: that is the answer.';
+            }
+            // A state-dependent rule read against a page with missed
+            // crossings corrupts everything after it -- so it gets a
+            // checkpoint with the EXACT count from this verified build,
+            // ahead of the instruction, where it can still help.
+            $stepId = $chainForExport['steps'][$pos]['id'];
+            if ($rule instanceof \Puzzlebook2\Rules\RequiresAccurateProgress
+                && isset($verification['counts'][$stepId])) {
+                $standing = $verification['counts'][$stepId]['before'];
+                $crossed = $total - $standing;
+                $text = sprintf(
+                    'CHECKPOINT: this rule only works if every rule before it is fully done. Exactly %s words '
+                    . 'should be crossed out by now, leaving %s still in play. If you have fewer crossed out, '
+                    . 'go back over the earlier rules and catch what you missed before continuing.'
+                    . "\n\n%s",
+                    number_format($crossed),
+                    number_format($standing),
+                    $text,
+                );
+            }
+            $chainForExport['steps'][$pos]['rule_text'] = $text;
+            if (isset($verification['counts'][$stepId])) {
+                $chainForExport['steps'][$pos]['removes'] = count($verification['eliminated'][$stepId] ?? []);
+                $chainForExport['steps'][$pos]['survivors_after'] = $verification['counts'][$stepId]['after'];
+            }
+        }
         $chainForExport['built_at'] = date('D j M Y, H:i');
 
         $bookJson = json_encode($book, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";

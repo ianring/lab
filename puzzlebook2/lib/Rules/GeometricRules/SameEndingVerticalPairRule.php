@@ -34,7 +34,7 @@ use Puzzlebook2\Solver\Rng;
  * NoUnplannedVerticalEndingMatch) is this rule's globalConstraints()
  * StandingPatternConstraint.
  */
-final class SameEndingVerticalPairRule implements Rule
+final class SameEndingVerticalPairRule implements Rule, \Puzzlebook2\Rules\RequiresAccurateProgress
 {
     use RuleIdentity;
 
@@ -165,5 +165,11 @@ final class SameEndingVerticalPairRule implements Rule
     public function kind(): string
     {
         return 'eliminate';
+    }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Going down each column, find every pair of vertically adjacent words that are both still standing, where both words end in the same letter. Cross out both words of the pair.';
     }
 }

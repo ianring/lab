@@ -22,4 +22,16 @@ abstract class WordLengthRule extends SpellingRuleBase
     {
         return "words of exactly {$this->length} letters";
     }
+
+    private const SPELLED = [
+        3 => 'THREE', 4 => 'FOUR', 5 => 'FIVE', 6 => 'SIX', 7 => 'SEVEN',
+        8 => 'EIGHT', 9 => 'NINE', 10 => 'TEN', 11 => 'ELEVEN', 12 => 'TWELVE',
+    ];
+
+    /** The printed instruction; the chain's final step gets its closing line appended by BookWriter. */
+    public function ruleText(): string
+    {
+        $spelled = self::SPELLED[$this->length] ?? (string) $this->length;
+        return "Cross out every remaining word of exactly {$spelled} letters.";
+    }
 }

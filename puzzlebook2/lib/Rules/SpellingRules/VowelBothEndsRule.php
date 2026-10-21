@@ -19,4 +19,10 @@ final class VowelBothEndsRule extends SpellingRuleBase
     {
         return 'words that start AND end with a vowel';
     }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Cross out every word that both starts and ends with a vowel, not necessarily the same one (IDEA, AORTA, AGENDA, UMBRELLA).';
+    }
 }

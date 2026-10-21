@@ -114,4 +114,10 @@ final class CornerContainsLetterRule implements Rule
     {
         return 'eliminate';
     }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Look at the four corners of every page (top-left, top-right, bottom-left, bottom-right). Cross out any corner word containing the letter E.';
+    }
 }

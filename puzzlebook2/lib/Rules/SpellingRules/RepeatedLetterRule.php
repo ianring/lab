@@ -25,4 +25,10 @@ final class RepeatedLetterRule extends SpellingRuleBase
     {
         return 'words where one consonant appears ' . self::TIMES . '+ times';
     }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Cross out every word in which the SAME consonant appears four or more times (ASSASSIN has four S).';
+    }
 }

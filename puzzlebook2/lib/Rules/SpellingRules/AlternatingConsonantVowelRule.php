@@ -31,4 +31,10 @@ final class AlternatingConsonantVowelRule extends SpellingRuleBase
     {
         return 'words of ' . self::MIN_LENGTH . '+ letters alternating consonant-vowel throughout (MACARONI)';
     }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Cross out every word of EIGHT OR MORE letters whose letters alternate consonant-vowel the whole way through, starting with a consonant (MACARONI is CVCVCVCV; DEGENERATE is CVCVCVCVCV). Y counts as a consonant. The alternation forces an even length, so these are always 8, 10, or 12 letters.';
+    }
 }

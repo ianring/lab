@@ -32,7 +32,7 @@ use Puzzlebook2\Solver\FilledBoard;
  * (9,3) adjacency -- v1's NoLengthAdjacentToOpposingLiteral, generalized
  * to protect every standing word rather than only literals.
  */
-final class LongShortNeighbourRule implements Rule
+final class LongShortNeighbourRule implements Rule, \Puzzlebook2\Rules\RequiresAccurateProgress
 {
     use RuleIdentity;
 
@@ -131,5 +131,11 @@ final class LongShortNeighbourRule implements Rule
     public function kind(): string
     {
         return 'eliminate';
+    }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Look for a 9-letter word that is adjacent (up, down, left, right, or diagonal) to a 3-letter word. Cross out both. If a word has more than one qualifying neighbour, all of them are crossed out, not just one pair.';
     }
 }

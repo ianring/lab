@@ -33,6 +33,7 @@ final class ChainRunner
 
         $lines = [];
         $eliminated = [];
+        $counts = [];
         $lines[] = sprintf('%d words in play.', $total);
 
         foreach ($plan->steps() as $pos => $step) {
@@ -48,6 +49,7 @@ final class ChainRunner
             }
             $eliminated[$step['id']] = $removedWords;
             $after = Engine::countSurvivors($keepAfter);
+            $counts[$step['id']] = ['before' => $before, 'after' => $after];
             $lines[] = sprintf(
                 'step %2d  %-32s removed %4d  (%d -> %d)',
                 $step['id'],
@@ -73,6 +75,6 @@ final class ChainRunner
                 $plan->answer(),
             );
 
-        return ['ok' => $ok, 'lines' => $lines, 'eliminated' => $eliminated, 'survivors' => $survivors];
+        return ['ok' => $ok, 'lines' => $lines, 'eliminated' => $eliminated, 'survivors' => $survivors, 'counts' => $counts];
     }
 }

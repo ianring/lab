@@ -34,4 +34,10 @@ final class BothEndPairsInSetRule extends SpellingRuleBase
         return 'words whose first two AND last two letters are all in '
             . strtoupper(implode('', self::LETTERS));
     }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Cross out every word whose first TWO letters and last TWO letters are ALL on the top row of a keyboard: Q W E R T Y U I O P. Any length qualifies.';
+    }
 }

@@ -31,7 +31,7 @@ use Puzzlebook2\Solver\FilledBoard;
  * this step (decoys, the answer) must never end up inside an all-dead
  * ring. Anything else it captures is genuinely emergent, as v1 intended.
  */
-final class SurroundedCaptureRule implements Rule
+final class SurroundedCaptureRule implements Rule, \Puzzlebook2\Rules\RequiresAccurateProgress
 {
     use RuleIdentity;
 
@@ -101,5 +101,13 @@ final class SurroundedCaptureRule implements Rule
     public function kind(): string
     {
         return 'eliminate';
+    }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside the logic so text and code cannot drift apart. Benched (not in the current chain) but ready. */
+    public function ruleText(): string
+    {
+        return 'Look at every surviving word on a page, not touching any edge of the page. If all 8 words '
+            . 'around it (up, down, left, right, and the four diagonals) have already been crossed out, '
+            . 'cross it out too -- a captured stone, as in the game Go.';
     }
 }

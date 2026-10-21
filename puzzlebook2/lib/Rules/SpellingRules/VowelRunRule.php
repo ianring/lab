@@ -24,4 +24,10 @@ final class VowelRunRule extends SpellingRuleBase
     {
         return 'words with 2+ vowels in a row, max ' . self::MAX_LENGTH . ' letters';
     }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Cross out every word of SIX LETTERS OR FEWER with two vowels side by side (Y does not count as a vowel), as in RAIN, HOUSE or QUIET.';
+    }
 }

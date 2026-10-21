@@ -108,7 +108,7 @@ if (!$verification['ok']) {
     exit(1);
 }
 
-$written = BookWriter::write($root, $result->board, $plan, $verification);
+$written = BookWriter::write($root, $result->board, $plan, $verification, $layout['print'] ?? []);
 echo "Verified the full chain end to end.\n\n";
 foreach ($verification['lines'] as $line) {
     echo $line . "\n";

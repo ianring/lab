@@ -23,4 +23,10 @@ abstract class ContainsSubstringRule extends SpellingRuleBase
     {
         return "words containing '{$this->needle}'";
     }
+
+    /** Parameterized printed instruction; a subclass with examples to give (ContainsZRule, ContainsChRule) overrides this. */
+    public function ruleText(): string
+    {
+        return 'Cross out every word containing ' . strtoupper($this->needle) . ', anywhere in it.';
+    }
 }

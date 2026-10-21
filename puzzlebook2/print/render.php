@@ -5,7 +5,7 @@ declare(strict_types=1);
 
 /**
  * Render the built book as a print-ready PDF at mass-market paperback trim
- * (4.25" x 6.87" / 108 x 175 mm): front matter and the numbered rules
+ * (5.25" x 7" / 133.35 x 177.8 mm): front matter and the numbered rules
  * first, then one PDF page per book page of words.
  *
  *   php print/render.php                 # build/book.json -> build/book.pdf
@@ -23,7 +23,7 @@ $root = dirname(__DIR__);
 $bookPath = $root . '/build/book.json';
 $chainPath = $root . '/build/chain.json';
 $outPath = $root . '/build/book.pdf';
-$title = 'Dragon Hunt';
+$title = 'Eliminoid';
 
 foreach (array_slice($argv, 1) as $arg) {
     if (preg_match('/^--out=(.+)$/', $arg, $m)) {
@@ -63,14 +63,18 @@ if (count($book['words']) !== $expected) {
     exit(2);
 }
 
-$pdf = new BookPdf($title);
+$layout = json_decode((string) file_get_contents($root . '/config/layout.json'), true);
+$pdf = new BookPdf($title, $layout['print'] ?? []);
 $pdf->render($book, $chain);
 $pdf->Output('F', $outPath);
 
 $pages = $book['grid']['pages'];
+$print = $layout['print'] ?? [];
 printf(
-    "Wrote %s -- %d PDF pages (front matter + rules + %d word pages) at 108 x 175 mm.\n",
+    "Wrote %s -- %d PDF pages (front matter + rules + %d word pages) at %.5g x %.5g mm.\n",
     $outPath,
     $pdf->PageNo(),
     $pages,
+    $print['trim_width_mm'] ?? 133.35,
+    $print['trim_height_mm'] ?? 177.8,
 );

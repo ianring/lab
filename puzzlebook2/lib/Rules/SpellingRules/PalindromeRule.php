@@ -19,4 +19,10 @@ final class PalindromeRule extends SpellingRuleBase
     {
         return 'words that read the same backwards';
     }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Cross out every word that reads the same forwards and backwards.';
+    }
 }

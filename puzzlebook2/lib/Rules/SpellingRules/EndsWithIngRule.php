@@ -18,4 +18,10 @@ final class EndsWithIngRule extends SpellingRuleBase
     {
         return 'words ending in -ING';
     }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Cross out every word ending in -ING (RUNNING, MORNING, STRING).';
+    }
 }

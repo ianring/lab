@@ -22,4 +22,10 @@ final class StartsWithTwoVowelsRule extends SpellingRuleBase
     {
         return 'words starting with two vowels in a row';
     }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Cross out every word starting with two vowels in a row (OASIS, EASIER, AUTUMN).';
+    }
 }

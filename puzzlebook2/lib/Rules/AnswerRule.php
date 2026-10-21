@@ -82,4 +82,10 @@ final class AnswerRule implements Rule
     {
         return 'answer';
     }
+
+    /** Never printed -- the answer's existence is the book's secret; this text exists only for exports and diagnostics. */
+    public function ruleText(): string
+    {
+        return 'One word in this book survives every rule. It is placed here, and it is the answer.';
+    }
 }

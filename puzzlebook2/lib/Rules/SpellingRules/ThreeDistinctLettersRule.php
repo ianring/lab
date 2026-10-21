@@ -25,4 +25,10 @@ final class ThreeDistinctLettersRule extends SpellingRuleBase
         return 'words of ' . self::MIN_LENGTH . '+ letters using ' . self::MAX_DISTINCT
             . ' or fewer distinct letters (REFERRER, BANANA)';
     }
+
+    /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
+    public function ruleText(): string
+    {
+        return 'Cross out every word of SIX LETTERS OR MORE spelled using three or fewer DISTINCT letters, however often each one repeats (REFERRER re-uses R, E, F; BANANA re-uses B, A, N).';
+    }
 }
