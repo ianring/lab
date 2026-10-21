@@ -231,6 +231,49 @@ milestones, Book 1 can soft-launch to betas); typo-fix vs Commitment
 tension (decide at freeze: commit to quest-critical invariants only, or
 full-text hash — logged as open sub-question under Q4).
 
+**D10 — The Mystery formula is LOCKED: all FIND, no arithmetic.
+(2026-10-21)**
+Finalizes D5 and closes Q2 (pattern for books 4+). The single uniform
+rule for every book N >= 2:
+  Mystery[N] is read in book N-1, at { page = the page book N's ANSWER
+  survives on; row, column = where book N-1's MYSTERY is found in book
+  N }.
+Book 1 is the root (no book before): its Mystery is the top-left word
+of the page its answer survives on, read in Book 1 itself. The whole
+story: the answer tells you which page, the previous Mystery tells you
+the spot, you read it in the book before.
+  Why FIND and not arithmetic: Ian rejected using a letter-sum checksum
+(A=1..Z=26) for anything in the DERIVATION — "not a very good hash, and
+I don't like using it." Earlier drafts used CHECKSUM(answer) for the
+page and LENGTH/VOWELCOUNT(prev mystery) for row/column; all removed.
+  What it guarantees (the point): the page needs THIS book's answer
+(you solved it), the spot needs the PREVIOUS book's Mystery (you walked
+the chain). So holding Book N's Mystery proves books 1..N were solved,
+and the Capstone's Mystery proves all 21. A leak of an early Mystery
+buys nothing — every step still demands that book's answer.
+  Clean consequence: every word in a book is unique (engine invariant),
+so each FIND lands on exactly one cell; no ambiguity, no bounds to hand-
+tune (any answer's page is 1..100, valid in both books). Plants needed:
+Mystery[N-1] sits somewhere in book N (so it can be found) and
+Mystery[N] sits at the computed cell in book N-1. A direct consequence
+is that Book N's Mystery word physically lives in Book N-1.
+
+**D11 — Verification is a salted hash on the website, not a printed
+letter-sum. (2026-10-21)**
+Each ANSWER and MYSTERY box prints a one-way hash of the correct word
+(SHA1/MD5 of word + a server-side secret salt), like a file-download
+fingerprint. The player types a candidate word on eliminoid.com and is
+told whether it matches. Replaces the old printed letter-sum checksum,
+which collided heavily (weak verifier) and leaked information about the
+word. The hash is precise (only the exact word matches) and one-way
+(the printed hash reveals nothing; the secret salt blocks offline
+reverse-tables — brute force means querying the site word by word,
+which is rate-limitable). P5 note: this is a logged website amenity;
+solving never requires it — the check is optional, books-alone still
+works. The PO box number also derives from the Capstone Mystery by a
+FIND (no arithmetic): the word is planted on the page equal to the
+rented box number, so finding it yields the box.
+
 ---
 
 ## Lexicon (technical, ratified direction 2026-10-20)
@@ -513,14 +556,13 @@ P6 substrate of printed ink + player-written ink):
   needs no solve history — "apply Rule 3 to column 2 of page 77; the
   4th word it would cross out is your next word." Reuses skills the
   player already learned; infinitely composable; zero new concepts.
-- **Printed checksums** (offline self-verification, P5's best friend):
-  "add the alphabet positions of your MysteryCode's letters; the total
-  should be 57." Confirms written answers without revealing them —
-  quest progress verifiable with no website, grade-6 arithmetic.
-  ENDORSED (Ian, 2026-10-20); kept plain A=1..Z=26 sums FOR NOW, with
-  "creative checksums" parked as an embellishment edge for later
-  (variant checks per book, checks that double as quest material —
-  all still grade-6, P1).
+- **Printed checksums** — SUPERSEDED by D11 (2026-10-21). The letter-sum
+  checksum (A=1..Z=26) was endorsed 2026-10-20 as offline self-
+  verification, but Ian later rejected it: it collides heavily (a wrong
+  word often shares a sum) and leaks information about the word.
+  Replaced by a one-way salted hash checked on eliminoid.com — precise,
+  one-way, and still optional (solving never requires the site). The
+  letter-sum is also gone from the Mystery derivation (see D10).
 - **The record page**: passport-style page in every book where ALL
   written state lives (Answer, MysteryCode, Trial word, snapshots) in
   numbered lines — later books reference "Book 4's record page, line
@@ -585,10 +627,10 @@ retro-revelation lands mid-series when trust is established.
   (lore-flavored: "never obliterate the dead"), plus a finisher-portal
   "archive oracle" for verified owners as the safety net. Printed
   full-word-list index rejected? (pending Ian's call)
-- **Q2:** the mystery-derivation pattern for books 4, 5, ... — needs a
-  shape that scales, only ever references backward, and keeps per-book
-  human error recoverable (site should verify each book's mystery code
-  independently, not only the final chain).
+- **Q2 — RESOLVED (Ian, 2026-10-21): see D10.** The uniform all-FIND
+  formula scales to every book, only references backward, and (via D11's
+  per-box website hash) lets the site verify each book's Mystery
+  independently, not only the final chain.
 - **Q3 — RESOLVED (Ian, 2026-10-20): no row/column labels.** Grid
   pages stay clean; readers finger-count ("they can finger-count down
   14 rows"). Revisit only if beta testers struggle.
