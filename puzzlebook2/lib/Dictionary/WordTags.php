@@ -222,4 +222,136 @@ final class WordTags
         }
         return true;
     }
+
+    /**
+     * The mirror of isInAlphabeticalOrder(): true if $word's letters never go
+     * FORWARD through the alphabet -- "zoom", "trod", "sponged". Repeated
+     * letters are allowed (they don't go forward either).
+     */
+    public static function isInReverseAlphabeticalOrder(string $word): bool
+    {
+        $len = strlen($word);
+        for ($i = 1; $i < $len; $i++) {
+            if ($word[$i] > $word[$i - 1]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * True if $word is at least $minLength letters and one of its two
+     * alternating tracks -- the letters at every other position -- is entirely
+     * one repeated vowel: BANANA (a,a,a on the even track), BIKINI (i,i,i),
+     * PAPAYA (a,a,a). The other track is unconstrained. The track must hold at
+     * least three letters, so the pattern genuinely carries the word.
+     */
+    public static function hasAlternatingSameVowel(string $word, int $minLength = 6): bool
+    {
+        $len = strlen($word);
+        if ($len < $minLength) {
+            return false;
+        }
+        foreach ([0, 1] as $parity) {
+            $track = [];
+            for ($i = $parity; $i < $len; $i += 2) {
+                $track[] = $word[$i];
+            }
+            if (count($track) < 3 || !self::isVowel($track[0])) {
+                continue;
+            }
+            $same = true;
+            foreach ($track as $letter) {
+                if ($letter !== $track[0]) {
+                    $same = false;
+                    break;
+                }
+            }
+            if ($same) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True if $word has an even length and its first half is an anagram of its
+     * second half -- "teammate" (TEAM / MATE), the two halves using exactly the
+     * same letters in a different order.
+     */
+    public static function halvesAreAnagrams(string $word): bool
+    {
+        $len = strlen($word);
+        if ($len === 0 || $len % 2 !== 0) {
+            return false;
+        }
+        $half = intdiv($len, 2);
+        $front = str_split(substr($word, 0, $half));
+        $back = str_split(substr($word, $half));
+        sort($front);
+        sort($back);
+        return $front === $back;
+    }
+
+    /** True if $word contains all five vowels A, E, I, O and U somewhere (Y never counts). */
+    public static function hasAllFiveVowels(string $word): bool
+    {
+        foreach (self::VOWELS as $v) {
+            if (!str_contains($word, $v)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** True if no letter of $word is used more than once -- every letter distinct. */
+    public static function isIsogram(string $word): bool
+    {
+        return count(array_unique(str_split($word))) === strlen($word);
+    }
+
+    /** How many places in $word hold the same letter twice in a row (BALLOON -> 2: LL and OO). */
+    public static function doubledLetterPairs(string $word): int
+    {
+        $pairs = 0;
+        for ($i = 0, $len = strlen($word); $i < $len - 1; $i++) {
+            if ($word[$i] === $word[$i + 1]) {
+                $pairs++;
+            }
+        }
+        return $pairs;
+    }
+
+    /** The number words that might hide inside a word, longest first so "ten" never pre-empts "ten"-in-a-longer one. */
+    private const NUMBER_WORDS = ['three', 'seven', 'eight', 'four', 'five', 'nine', 'zero', 'one', 'two', 'six', 'ten'];
+
+    /** True if a spelled-out number (ONE..TEN, ZERO) sits inside $word, and $word is not simply that number. */
+    public static function hidesNumberWord(string $word): bool
+    {
+        foreach (self::NUMBER_WORDS as $n) {
+            if ($word !== $n && str_contains($word, $n)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True if $word holds $runLength letters that are consecutive in the alphabet AND adjacent in the word (DEF, RST). */
+    public static function hasConsecutiveAlphabetRun(string $word, int $runLength): bool
+    {
+        $len = strlen($word);
+        for ($i = 0; $i + $runLength <= $len; $i++) {
+            $run = true;
+            for ($k = 1; $k < $runLength; $k++) {
+                if (ord($word[$i + $k]) !== ord($word[$i]) + $k) {
+                    $run = false;
+                    break;
+                }
+            }
+            if ($run) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

@@ -46,23 +46,44 @@ final class ChainPlan
     private ?ChainContext $answerContext = null;
     private ?Demand $answerDemand = null;
 
+    /** @var \Puzzlebook2\Rules\PlantRule[] fixed words at fixed cells (mysteries, acrostics) */
+    private array $plantRules = [];
+    /** @var ChainContext[] parallel to $plantRules */
+    private array $plantContexts = [];
+    /** @var Demand[] parallel to $plantRules */
+    private array $plantDemands = [];
+
     private int $finalPos = -1;
     private ?StepResolver $resolver = null;
 
     /** @var string[] */
     private array $problems = [];
 
+    /**
+     * @param array<int,array{cell:int,word:string,id?:string,role?:string}> $plantSpecs
+     */
     private function __construct(
         private array $chain,
         private Board $board,
         private Dictionary $dictionary,
         private int $seed,
+        private array $plantSpecs = [],
+        private ?int $answerCell = null,
     ) {
     }
 
-    public static function load(array $chainConfig, Board $board, Dictionary $dictionary, int $seed): self
+    /**
+     * @param array<int,array{cell:int,word:string,id?:string,role?:string}> $plants
+     *     Fixed words pinned at fixed cells -- the Mystery words. Each is
+     *     placed (Exact arity, like the answer) and must be crossed out by
+     *     some spelling rule (a dead word, still readable); ChainPlan
+     *     validates that and records its death step.
+     * @param ?int $answerCell pin the answer to this exact (page-edge) cell so
+     *     the book's answer PAGE is known before solving; null = free pick.
+     */
+    public static function load(array $chainConfig, Board $board, Dictionary $dictionary, int $seed, array $plants = [], ?int $answerCell = null): self
     {
-        $plan = new self(self::numberSteps($chainConfig), $board, $dictionary, $seed);
+        $plan = new self(self::numberSteps($chainConfig), $board, $dictionary, $seed, $plants, $answerCell);
         $plan->read();
         return $plan;
     }
@@ -113,6 +134,30 @@ final class ChainPlan
                 }
             }
         }
+
+        // ---- incompatible rule pairs (declared via INCOMPATIBLE_WITH) ----
+        // Two rules whose matches so overlap that a book must not hold both:
+        // a subset rule beside its superset (ContainsOnt beside ContainsNt),
+        // or two pair rules that would police each other's plants (semordnilap
+        // vs anagram). Symmetric -- either side's declaration is enough.
+        // bin/compute-incompatibilities.php stamps the spelling ones; pair/
+        // geometric ones are hand-declared on the class.
+        $declared = [];
+        foreach ($this->rules as $rule) {
+            $rc = new \ReflectionClass($rule);
+            $const = $rc->hasConstant('INCOMPATIBLE_WITH') ? $rc->getConstant('INCOMPATIBLE_WITH') : [];
+            $declared[$rule->id()] = is_array($const) ? $const : [];
+        }
+        $present = array_keys($declared);
+        foreach ($present as $x => $a) {
+            foreach (array_slice($present, $x + 1) as $b) {
+                if (in_array($b, $declared[$a], true) || in_array($a, $declared[$b], true)) {
+                    $this->problems[] = "Rules '{$a}' and '{$b}' are declared incompatible "
+                        . '(one subsumes the other), so a book must not use both.';
+                }
+            }
+        }
+
         if ($this->finalPos === -1) {
             $this->problems[] = "config/chain.json needs one step marked 'final' => true.";
             return;
@@ -147,8 +192,73 @@ final class ChainPlan
         foreach ($this->rules as $pos => $rule) {
             $death[$rule->id()] = $rule->kind() === 'decoy' ? $this->finalPos : $pos;
         }
-        $this->answerRule = new AnswerRule($answer);
+        if ($this->answerCell !== null && ($this->answerCell < 0 || $this->answerCell >= $size)) {
+            $this->problems[] = "answerCell {$this->answerCell} is outside 0.." . ($size - 1) . '.';
+        }
+        $this->answerRule = new AnswerRule($answer, $this->answerCell);
         $death[$this->answerRule->id()] = PHP_INT_MAX;
+
+        // ---- plants (fixed words at fixed cells: mysteries, acrostics) -----
+        // Built like the answer, but each dies at the earliest spelling rule
+        // its word fails -- recorded in the death map so geometric rules'
+        // standing logic treats it correctly.
+        $usedCells = [];
+        foreach ($this->plantSpecs as $spec0) {
+            $cell = (int) ($spec0['cell'] ?? -1);
+            $id = (string) ($spec0['id'] ?? ('plant#' . $cell));
+            $role = (string) ($spec0['role'] ?? 'plant');
+            if ($cell < 0 || $cell >= $size) {
+                $this->problems[] = "Plant '{$id}' names cell {$cell}, outside 0.." . ($size - 1) . '.';
+                continue;
+            }
+            if (isset($usedCells[$cell])) {
+                $this->problems[] = "Two plants claim cell {$cell}.";
+                continue;
+            }
+            $usedCells[$cell] = true;
+
+            if (isset($spec0['letter'])) {
+                // ACROSTIC plant: fix only the first letter; the word is any
+                // eliminable one that starts with it (dictionary fallback).
+                $letter = strtolower((string) $spec0['letter']);
+                $candidates = $this->acrosticCandidates($letter, $answer);
+                if ($candidates === []) {
+                    $this->problems[] = "Acrostic plant at cell {$cell}: no eliminable word starts with '{$letter}'.";
+                    continue;
+                }
+                // Conservative, always-safe death: no geometric rule runs after
+                // the final step, so treating it as standing throughout never
+                // misleads a standing-pattern constraint. Replay eliminates it
+                // via the spelling rule it actually fails.
+                $deathPos = $this->finalPos;
+            } else {
+                // MYSTERY plant: one exact word; its identity matters.
+                $word = (string) ($spec0['word'] ?? '');
+                if ($word === '') {
+                    $this->problems[] = "Plant '{$id}' has neither a word nor a letter.";
+                    continue;
+                }
+                if ($word === $answer) {
+                    $this->problems[] = "Plant at cell {$cell} is the answer word '{$word}' -- a plant must be eliminable.";
+                    continue;
+                }
+                $deathPos = $this->plantDeathStep($word);
+                if ($deathPos === null) {
+                    $this->problems[] = "Plant '{$word}' (cell {$cell}) survives every spelling rule -- it would be a "
+                        . 'second survivor. Choose a word some rule crosses out.';
+                    continue;
+                }
+                $candidates = [$word];
+            }
+
+            if (isset($death[$id])) {
+                $this->problems[] = "Plant id '{$id}' is not unique.";
+                continue;
+            }
+            $death[$id] = $deathPos;
+            $this->plantRules[] = new \Puzzlebook2\Rules\PlantRule($id, $cell, $candidates, $role);
+        }
+
         $this->resolver = new StepResolver($death);
 
         // ---- keep_fraction budgets (v1 cascade math, ported) -----------
@@ -158,7 +268,7 @@ final class ChainPlan
                 $decoyCells += $rule->demand($this->bareContext($pos, 0, $fullSurvivors))->count;
             }
         }
-        $available = $size - $decoyCells - 1; // -1: the answer's cell
+        $available = $size - $decoyCells - 1 - count($this->plantRules); // -1 answer, -K plants
 
         $budgets = [];
         $keepFractionPositions = [];
@@ -213,11 +323,19 @@ final class ChainPlan
         $this->answerContext = $this->bareContext(count($this->steps), 0, $fullSurvivors);
         $this->answerDemand = $this->answerRule->demand($this->answerContext);
 
+        // Plant contexts/demands -- Exact, so the pool is unused; distinct
+        // stepIndex per plant only to keep their seeds apart.
+        $basePos = count($this->steps) + 1;
+        foreach ($this->plantRules as $i => $plant) {
+            $this->plantContexts[$i] = $this->bareContext($basePos + $i, 0, []);
+            $this->plantDemands[$i] = $plant->demand($this->plantContexts[$i]);
+        }
+
         // Pair rules claim 2 cells per scope and cap their pair counts, so
         // actual cells can fall short of the keep_fraction budgets; the
         // absorber (ordinary filler with real fallback) takes the leftover
         // -- exactly v1's absorb-leftover-cells step, now explicit.
-        $cells = 1; // the answer
+        $cells = 1 + count($this->plantRules); // the answer + one cell per plant
         foreach ($this->demands as $d) {
             $cells += $d->count * $d->cellsPerScope;
         }
@@ -249,7 +367,7 @@ final class ChainPlan
                 );
             }
         }
-        $finalCells = 1;
+        $finalCells = 1 + count($this->plantRules);
         foreach ($this->demands as $d) {
             $finalCells += $d->count * $d->cellsPerScope;
         }
@@ -342,5 +460,65 @@ final class ChainPlan
             }
         }
         $queue->push(new ReservationSlot($this->answerRule, $this->answerDemand, $this->answerContext, 0));
+        foreach ($this->plantRules as $i => $plant) {
+            $queue->push(new ReservationSlot($plant, $this->plantDemands[$i], $this->plantContexts[$i], 0));
+        }
+    }
+
+    /** @return \Puzzlebook2\Rules\PlantRule[] */
+    public function plantRules(): array
+    {
+        return $this->plantRules;
+    }
+
+    /**
+     * The step position at which a planted word would be crossed out -- the
+     * earliest spelling rule (the final sweep included) whose predicate it
+     * fails. null means no spelling rule removes it, so it would wrongly
+     * survive; the planner must pick a different word.
+     */
+    private function plantDeathStep(string $word): ?int
+    {
+        foreach ($this->steps as $pos => $step) {
+            $rule = $this->rules[$pos];
+            if ($rule instanceof SpellingRuleBase && $rule->failsWord($word)) {
+                return $pos;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Every eliminable dictionary word that starts with $letter and fits a
+     * grid column -- the candidate pool for an acrostic cell, where only the
+     * first letter is fixed. "Eliminable" is tested against THIS book's own
+     * spelling rules, so each candidate is a legal dead word here. Seed-
+     * shuffled so different cells draw different words.
+     *
+     * @return string[]
+     */
+    private function acrosticCandidates(string $letter, string $answer): array
+    {
+        $out = [];
+        foreach ($this->dictionary->all() as $w) {
+            if ($w === '' || $w[0] !== $letter) {
+                continue;
+            }
+            $len = strlen($w);
+            if ($len < 3 || $len > 6 || $w === $answer) {
+                continue;
+            }
+            foreach ($this->steps as $pos => $step) {
+                if ($pos === $this->finalPos) {
+                    continue;
+                }
+                $rule = $this->rules[$pos];
+                if ($rule instanceof SpellingRuleBase && $rule->failsWord($w)) {
+                    $out[] = $w;
+                    break;
+                }
+            }
+        }
+        return \Puzzlebook2\Solver\Rng::shuffle($out, $this->seed + 7919);
     }
 }

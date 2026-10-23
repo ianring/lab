@@ -12,7 +12,7 @@ use Puzzlebook2\Rules\SpellingRuleBase;
  * alternate consonant-vowel the whole way through, starting with a
  * consonant -- MACARONI is CVCVCVCV, DEGENERATE is CVCVCVCVCV. The strict
  * alternation forces an even length, so in practice this catches words of
- * 8, 10, 12... letters. Y counts as a consonant, as everywhere else.
+ * 8 or 10 letters (the dictionary tops out at 10). Y counts as a consonant.
  */
 final class AlternatingConsonantVowelRule extends SpellingRuleBase
 {
@@ -35,6 +35,6 @@ final class AlternatingConsonantVowelRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word of EIGHT OR MORE letters whose letters alternate consonant-vowel the whole way through, starting with a consonant (MACARONI is CVCVCVCV; DEGENERATE is CVCVCVCVCV). Y counts as a consonant. The alternation forces an even length, so these are always 8, 10, or 12 letters.';
+        return 'Cross out every word of EIGHT OR MORE letters whose letters alternate consonant-vowel the whole way through, starting with a consonant (MACARONI is CVCVCVCV; DEGENERATE is CVCVCVCVCV). Y counts as a consonant. The alternation forces an even length, so these are always 8 or 10 letters.';
     }
 }

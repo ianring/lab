@@ -13,7 +13,7 @@ use Puzzlebook2\Solver\FilledBoard;
  * the real Rule object, and applies a rule's elimination to a keep-mask.
  * This -- and the Rule classes it dispatches to -- is the only place a rule
  * MEANS anything: bin/build.php, bin/check.php, ChainRunner, and
- * web/api.php all call it, so a rule can't quietly mean something different
+ * preview/api.php all call it, so a rule can't quietly mean something different
  * depending on who's asking. The browser never re-implements a rule.
  *
  * A rule's 'type' is the short name of its class under

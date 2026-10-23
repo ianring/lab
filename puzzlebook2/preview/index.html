@@ -463,6 +463,9 @@
       <div class="stat"><span class="stat-value" id="stat-stage">—</span><span class="stat-label">step</span></div>
     </div>
     <div class="actions">
+      <label class="book-picker" style="display:flex;align-items:center;gap:6px;font-size:13px;">Book
+        <select id="book-select" style="font:inherit;padding:5px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:inherit;"></select>
+      </label>
       <button class="btn" id="btn-run-all">Run remaining</button>
       <button class="btn" id="btn-reset">Reset</button>
     </div>
@@ -488,14 +491,14 @@
    Data: book.json and chain.json are fetched at load time (see "App
    state + rendering" below) -- this page carries no copy of the book
    or the chain itself. Both files are written by bin/build.php
-   straight into web/, so what you see here is the exact book that was
+   straight into preview/, so what you see here is the exact book that was
    built, not a separate re-implementation of the construction logic.
    =================================================================== */
 
 /* ===================================================================
    Layout math only -- where a word sits in the page/row/col grid, for
    rendering. This page does not evaluate any rule or reveal; every
-   "what does the chain do" question is answered by web/api.php, which
+   "what does the chain do" question is answered by preview/api.php, which
    calls the one real implementation (lib/Engine.php) on the server.
    =================================================================== */
 
@@ -511,6 +514,7 @@ let grid, totalWords, words, CHAIN;
 let keep, removedAtStep, stepIndex, applied;
 let loadedBook = null;
 let loadedChain = null;
+let currentBook = null;   // which series book is loaded (null = legacy single book)
 
 let busy = false;
 let stepError = null;
@@ -755,7 +759,7 @@ async function applyOneStep() {
     const res = await fetch("api.php", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ step_index: stepIndex, keep }),
+      body: JSON.stringify({ book: currentBook, step_index: stepIndex, keep }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -806,9 +810,9 @@ function showLoadError(err) {
     <div class="card is-current">
       <div class="card-head"><h2>Couldn't load the book</h2></div>
       <p class="rule-text">${String((err && err.message) || err)}</p>
-      <p class="pattern-text">Run <code>php bin/build.php</code> on your server first -- it writes
-      <code>book.json</code> and <code>chain.json</code> straight into this <code>web/</code> folder.
-      Then reload this page from the same place those two files ended up.</p>
+      <p class="pattern-text">Run <code>php bin/build-series.php</code> on your server first -- it writes
+      each book into <code>build/series/bookNN/</code>, which this page reads through
+      <code>api.php</code>. Then reload this page served from the <code>preview/</code> folder.</p>
     </div>
   `;
   bookEl.innerHTML = "";
@@ -817,11 +821,38 @@ function showLoadError(err) {
   statStage.textContent = "—";
 }
 
-async function boot() {
+async function loadBook(n) {
   try {
+    const data = await fetchJson(`api.php?book=${n}`);
+    loadedBook = data.book;
+    loadedChain = data.chain;
+    currentBook = n;
+    fullReset();
+  } catch (err) {
+    showLoadError(err);
+  }
+}
+
+async function boot() {
+  const sel = document.getElementById("book-select");
+  try {
+    const list = await fetchJson("api.php?list=1");
+    const books = (list && list.books) || [];
+    if (books.length > 0) {
+      sel.innerHTML = books
+        .map((n) => `<option value="${n}">Book ${n}${n === Math.max(...books) ? " (Capstone)" : ""}</option>`)
+        .join("");
+      sel.addEventListener("change", () => loadBook(parseInt(sel.value, 10)));
+      await loadBook(books[0]);
+      return;
+    }
+    // No series built -- fall back to single-book files beside api.php.
+    sel.innerHTML = `<option>single book</option>`;
+    sel.disabled = true;
     const [book, chain] = await Promise.all([fetchJson("book.json"), fetchJson("chain.json")]);
     loadedBook = book;
     loadedChain = chain;
+    currentBook = null;
     fullReset();
   } catch (err) {
     showLoadError(err);

@@ -7,6 +7,11 @@ namespace Puzzlebook2\Rules\SpellingRules;
 /** Cross out every word containing the letter pair CH (CHURCH, ANCHOR, MATCH). */
 final class ContainsChRule extends ContainsSubstringRule
 {
+    /** Auto-computed by bin/compute-incompatibilities.php -- do not hand-edit; rerun the tool. */
+    public const INCOMPATIBLE_WITH = ['ContainsNchRule', 'ContainsSchRule', 'ContainsTchRule'];
+
+
+
     public function __construct()
     {
         parent::__construct('ch');

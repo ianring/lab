@@ -260,19 +260,42 @@ is that Book N's Mystery word physically lives in Book N-1.
 
 **D11 — Verification is a salted hash on the website, not a printed
 letter-sum. (2026-10-21)**
-Each ANSWER and MYSTERY box prints a one-way hash of the correct word
-(SHA1/MD5 of word + a server-side secret salt), like a file-download
-fingerprint. The player types a candidate word on eliminoid.com and is
-told whether it matches. Replaces the old printed letter-sum checksum,
+Each ANSWER and MYSTERY box prints a fingerprint of the correct word.
+The player types a candidate word into the hasher at eliminoid.com and
+compares the fingerprint it shows against the one in the book; a match
+means the right word. Replaces the old printed letter-sum checksum,
 which collided heavily (weak verifier) and leaked information about the
-word. The hash is precise (only the exact word matches) and one-way
-(the printed hash reveals nothing; the secret salt blocks offline
-reverse-tables — brute force means querying the site word by word,
-which is rate-limitable). P5 note: this is a logged website amenity;
-solving never requires it — the check is optional, books-alone still
-works. The PO box number also derives from the Capstone Mystery by a
-FIND (no arithmetic): the word is planted on the page equal to the
-rented box number, so finding it yields the box.
+word. A hash is precise (only the exact word matches). P5 note: a
+logged website amenity; solving never requires it — the check is
+optional, books-alone still works.
+
+IMPLEMENTATION (built 2026-10-21, puzzlebook2/web/index.php): the
+hasher computes `md5(NORMALISED_WORD . "ELIMINOID")` and DISPLAYS the
+digest in CROCKFORD BASE32 (alphabet `0123456789ABCDEFGHJKMNPQRSTVWXYZ`
+— digits + A-Z minus I,L,O,U), not hex: a 32-symbol alphabet, 26 chars,
+all-caps, no 0/O or 1/I/L confusion when read off a page. Example:
+FROG -> `24ZM KV3W E705 4SF5 9NWX C807 5X`. Normalisation = uppercase,
+keep A-Z only (so "frog!", " Frog ", "FROG" all check alike). SHARED
+CODE: the salt, normalisation, and alphabet live once in the class
+`Puzzlebook2\Fingerprint` (puzzlebook2/lib/Fingerprint.php) —
+`Fingerprint::of($word)`, `::normalise()`, `::encode()`, `::grouped()`,
+`::ALPHABET`, `::SALT`. Both the website (web/index.php) and the book
+print pipeline call it, so screen and page can never drift. Verified
+identical across the shared class, the web front end, and the rendered
+book.
+SALT TRADEOFF (Ian's call): the salt is PUBLIC ("ELIMINOID") and the
+hash is shown, so this is a convenience checker, NOT an anti-cheat
+gate — anyone can compute the same fingerprint for any word, and a
+printed fingerprint is reversible by brute-forcing the dictionary.
+This DIFFERS from the earlier sketch here (server-side SECRET salt,
+return only match/no-match, rate-limited) which would keep the hash
+one-way and unprecomputable. If the anti-cheat strength is ever wanted
+back, switch to the secret-salt/compare-server-side variant. The
+quest's real gate does not rest on this either way: it is the Capstone
+Mystery (the PO box number) plus the possession probe at claim time.
+The PO box number derives from the Capstone Mystery by a FIND (no
+arithmetic): the word is planted on the page equal to the rented box
+number, so finding it yields the box.
 
 ---
 

@@ -8,6 +8,7 @@ use Puzzlebook2\Board\BoardSpec;
 use Puzzlebook2\Board\PageEdges;
 use Puzzlebook2\Chain\ChainContext;
 use Puzzlebook2\Chain\KeepMask;
+use Puzzlebook2\Rules\Generators\FixedCellGenerator;
 use Puzzlebook2\Rules\Generators\SingleFreeCellGenerator;
 use Puzzlebook2\Solver\ConsumedWords;
 use Puzzlebook2\Solver\FilledBoard;
@@ -24,7 +25,13 @@ final class AnswerRule implements Rule
 {
     use RuleIdentity;
 
-    public function __construct(private string $answer)
+    /**
+     * $fixedCell pins the answer to one exact cell (a page-edge cell the
+     * series planner chose, so the book's answer PAGE is known before the
+     * fill -- the Mystery chain needs that). null keeps the original
+     * behaviour: any free edge cell, chosen by the solver.
+     */
+    public function __construct(private string $answer, private ?int $fixedCell = null)
     {
     }
 
@@ -52,11 +59,14 @@ final class AnswerRule implements Rule
         // structurally capturable. (Learned the expensive way: with the
         // answer interior, every cell of its ring but one must stay
         // standing, and the search thrashes proving it.)
+        $generator = $this->fixedCell !== null
+            ? new FixedCellGenerator($this->fixedCell)
+            : new SingleFreeCellGenerator(PageEdges::interior($ctx->board()->spec()));
         return new Demand(
             label: $this->id(),
             count: 1,
             arity: Arity::Exact,
-            generator: new SingleFreeCellGenerator(PageEdges::interior($ctx->board()->spec())),
+            generator: $generator,
             cellsPerScope: 1,
             rawSupplyEstimate: 1,
             wordChooser: static function (ConsumedWords $consumed, int $seed, int $draw) use ($answer): ?array {

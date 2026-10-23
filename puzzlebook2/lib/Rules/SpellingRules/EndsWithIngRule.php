@@ -9,6 +9,11 @@ use Puzzlebook2\Rules\SpellingRuleBase;
 /** Cross out every word ending in -ING (RUNNING, MORNING, STRING). */
 final class EndsWithIngRule extends SpellingRuleBase
 {
+    /** Auto-computed by bin/compute-incompatibilities.php -- do not hand-edit; rerun the tool. */
+    public const INCOMPATIBLE_WITH = ['ContainsNgRule'];
+
+
+
     public function failsWord(string $word): bool
     {
         return strlen($word) > 3 && str_ends_with($word, 'ing');

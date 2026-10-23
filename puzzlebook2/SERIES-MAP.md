@@ -97,65 +97,80 @@ Capstone points to it. That is the whole kit; nothing else to track.
 
 ## How every Mystery is found
 
-LOCKED FORMULA — do not change without a new agreement. No checksum
-anywhere in the derivation; everything is FIND.
+LOCKED FORMULA — do not change without a new agreement (Ian, 2026-10-23).
 
-Every book's Mystery is found the same way. It needs two things you
-can only have if you earned them: the ANSWER you solved for THIS book,
-and the MYSTERY Word from the book before.
+Book 1 (the root) derives its Mystery from its own answer. Books 2-21
+BLEND the positions of two words. Both are read IN THE SAME BOOK.
+
+Books 2-21:
 
   "1. Find your answer for this book — the one word still standing.
-      The PAGE it is on is your page number.
+      Note its page, row, and column.
    2. Find your Mystery Word from the book before, here in this book.
-      Note its ROW and its COLUMN.
-   3. Open the book before to that page, that row, that column. The
-      word there is this book's Mystery Word."
+      Note its page, row, and column.
+   3. Add them: the two pages (subtract 100 if over 100); the two rows
+      (subtract 25 if over 25); the two columns (subtract 5 if over 5).
+   4. The word at that page, row, and column in THIS book is your
+      Mystery Word."
 
-The answer tells you which page; the last Mystery tells you the spot;
-you read it in the book before. Step 1 needs this book's answer, so
-you must have SOLVED it — owning it is not enough. Step 2 needs the
-book before's Mystery, which needed its answer, and so on down the
-line. So holding Book N's Mystery proves you solved every book from 1
-to N (law 9).
+Book 1 (no previous Mystery):
 
-Book 1 is the root: it has no book before, so it reads in itself, and
-with no previous Mystery its spot is the top-left of the page.
+  "Turn your answer's letters into numbers (A=1, B=2...) and add them
+   up — that is the page. The answer's letter count is the row; its
+   vowel count is the column. The word there is your Mystery Word."
+
+Why the blend (the point, for us — never printed): adding an
+unknown-but-uniform position is a one-time pad. With only ONE of the
+two words you can compute nothing — the Mystery stays 1 in 12,500 (the
+whole book), the best possible. You need THIS book's answer (you solved
+it) AND the previous Mystery (you walked the chain). So holding Book N's
+Mystery proves books 1..N were solved; the Capstone's proves all 21
+(law 9). Each answer and each Mystery is planted at a uniformly-random
+cell, so the pad is uniform.
 
 ```pseudocode
-FIND(book, word) = { locate word in book; return {page, row, column} }
-LOOKUP(book, pos)= { return the word printed at pos }
+POS(book, word)  = { the word's cell in that book: {page, row, column} }
+LOOKUP(book, pos)= { the word printed at pos }
+CHECKSUM(word)   = { add letter scores A=1, B=2, ...; return the total }
+LENGTH(word)     = { number of letters }
+VOWELCOUNT(word) = { number of vowels (A E I O U) }
+// wrap: pages 1..100, rows 1..25, columns 1..5
 
-// Every book N >= 2:
-Mystery[N] = LOOKUP( book[N-1], {
-  page:   FIND(book[N], Answer[N]).page,       // the lone survivor's page
-  row:    FIND(book[N], Mystery[N-1]).row,     // you walked the chain
-  column: FIND(book[N], Mystery[N-1]).column
-} )
+// Every book N >= 2, read IN book N:
+a = POS(book[N], Answer[N]);        // you solved this book
+m = POS(book[N], Mystery[N-1]);     // you walked the chain
+Mystery[N] = LOOKUP( book[N], {
+  page:   wrap(a.page   + m.page,   100),
+  row:    wrap(a.row    + m.row,    25),
+  column: wrap(a.column + m.column, 5)
+} );
 
-// Book 1 (the root): no previous Mystery; spot is top-left.
+// Book 1 (the root), read IN book 1:
 Mystery[1] = LOOKUP( book[1], {
-  page:   FIND(book[1], Answer[1]).page,
-  row:    1,
-  column: 1
-} )
+  page:   CHECKSUM(Answer[1]),   // letter-sum, A=1..Z=26
+  row:    LENGTH(Answer[1]),     // number of letters
+  column: VOWELCOUNT(Answer[1])  // number of vowels
+} );
 ```
 
-The Mysteries are deliberately plain and uniform. The only hidden
-cleverness is a handful of acrostics (see "Hidden in the books"),
-and nothing points at them until the very end.
+The Mysteries are deliberately plain. The only other hidden content is
+a handful of acrostics (see "Hidden in the books"), pointed at nowhere
+until the Capstone.
 
 ## Book by book
 
 ### Books 1-5
 
 **Book 1.** The root of the chain. It has no book before and no
-previous Mystery, so it reads in itself:
+previous Mystery, so it derives its Mystery from its own answer:
 
-  "Find your answer — the one word still standing. Your Mystery Word
-  is the top-left word of the page your answer is on."
+  "Turn your answer's letters into numbers (A=1, B=2...) and add them
+  up — that is a page. The answer's letter count is the row; its vowel
+  count is the column. The word at that page, row, and column is your
+  Mystery Word."
 
-[prov] With the answer LANTERN surviving on page 84, the Mystery is
-the word at row 1, column 1 of page 84 — [prov] CINDER. Every later
+[prov] With the answer LANTERN: letter-sum 84, seven letters, two
+vowels — page 84, row 7, column 2, holding [prov] CINDER. Every later
 Mystery grows out of this one.
 
 Book 1 also carries two things the reader never notices while solving
@@ -167,15 +182,16 @@ it:
   not a column, so it is far harder to spot. No box, no instruction —
   it stays dormant until the Capstone tells the reader to read it. It
   is the addressee line of the mailing address.
-- Book 2's Mystery word (VESSEL), sitting at the spot Book 2's
-  lookup reads — because every book reads its Mystery in the book
-  before, Book N's Mystery lives in Book N-1.
+- The Capstone's Mystery word, planted on one page: the page number
+  it sits on is the PO box number. No box, no instruction — dormant
+  until the Capstone tells the reader to find it.
 
 **Book 2.** The standard procedure begins (see "How every Mystery is
-found"): your Book 2 answer's page gives the page number; the spot
-where Book 1's Mystery sits in Book 2 gives the row and column; you
-read that spot in Book 1. [prov] Mystery: VESSEL. Book 2 teaches the
-procedure plainly, since every later book repeats it.
+found"): find your Book 2 answer and Book 1's Mystery, both here in
+Book 2; add their positions (page+page, row+row, column+column, each
+wrapped); the word at that spot in Book 2 is the Mystery. [prov]
+Mystery: VESSEL. Book 2 teaches the procedure plainly, since every
+later book repeats it.
 
 **Book 3.** Same procedure, now using Book 3's answer and Book 2's
 Mystery. [prov] Mystery: TBD. By the third book the chain feels like a
@@ -337,16 +353,18 @@ from the start.
 
 ```pseudocode
 // Book 21's Mystery, by the same rule as every book -- proof of all 21:
-Mystery[capstone] = LOOKUP(book20, {
-  page:   FIND(capstone, Answer[capstone]).page,   // solved the diagonal
-  row:    FIND(capstone, Mystery[20]).row,         // walked the whole chain
-  column: FIND(capstone, Mystery[20]).column
+a = POS(capstone, Answer[capstone]);   // solved the diagonal
+m = POS(capstone, Mystery[20]);        // walked the whole chain
+Mystery[capstone] = LOOKUP(capstone, {
+  page:   wrap(a.page + m.page, 100),
+  row:    wrap(a.row + m.row, 25),
+  column: wrap(a.column + m.column, 5)
 })
 
 // The box number comes from the enclosed word by a FIND the Capstone
 // prints -- no arithmetic. [prov]: the builder plants the word on the
 // page equal to the rented box number, so finding it gives the box.
-boxNumber    = FIND(book[named by Capstone], Mystery[capstone]).page  // [prov]
+boxNumber    = POS(book[named by Capstone], Mystery[capstone]).page  // [prov]
 enclosedWord = Mystery[capstone]                    // what you mail
 
 // Other address lines: acrostics the Capstone names, in earlier books.
@@ -449,17 +467,18 @@ here, it is missing in the design.
 The technical section. Every plant is machine-validated at series
 build; every secret must appear in the revealer ledger.
 
-The Mystery chain (the backbone) — all FIND, no arithmetic:
-- For every book N >= 2, Mystery[N] is read in book N-1 at { page =
-  the page Answer[N] survives on in book N; row, column = where
-  Mystery[N-1] is found in book N }. The page comes from THIS book's
-  answer (you solved it); the row/column from the previous Mystery
-  (you walked the chain). Book 1 reads in itself: the top-left word of
-  its answer's page.
-- Plants the chain needs: Mystery[N-1] must sit somewhere in book N
-  (so step 2 can find it), and Mystery[N] must sit at the computed
-  cell in book N-1. The builder places both. Every word in a book is
-  unique, so each FIND lands on exactly one cell — no ambiguity.
+The Mystery chain (the backbone) — position-blend, read in this book:
+- For every book N >= 2, Mystery[N] is read in book N at the cell got
+  by ADDING (per coordinate, wrapping) the positions of THIS book's
+  answer and the previous book's Mystery, both located in book N. Book
+  1 is the root: no previous Mystery, so its cell comes from its own
+  answer -- letter-sum = page, letter count = row, vowel count = column
+  -- read in Book 1.
+- Plants the chain needs, all in book N: the answer at its uniform
+  (non-corner) cell; Mystery[N-1] planted at a uniform cell so the
+  reader can find it; Mystery[N] planted at the blended cell. Every
+  word in a book is unique, so finding the answer or the previous
+  Mystery lands on exactly one cell.
 - No page/row/column can land out of bounds: any answer's page is
   1..100 (valid in both books), and a found word's row/column are
   real grid positions by construction. Nothing to constrain by hand.
@@ -514,11 +533,11 @@ before Book 1 goes on sale.
 
 Every book has an **Answer** (the word left standing after the main
 puzzle) and a **Mystery** (found after the Answer). From Book 2 on,
-the Mystery is always the same procedure, all FIND and no arithmetic:
-this book's answer gives the page, the spot where the previous book's
-Mystery sits in this book gives the row and column, and you read that
-spot in the book before. Book 1 reads the top-left of its answer's
-page. So each Mystery needs both this book's answer (solved) and the
+the Mystery is always the same: find this book's answer and the
+previous book's Mystery (both here in this book), add their positions
+coordinate-by-coordinate (wrapping), and read that spot in this book.
+Book 1 (the root) derives its cell from its own answer: letter-sum =
+page, letter count = row, vowel count = column. So each Mystery needs both this book's answer (solved) and the
 chain. Both the Answer and the Mystery carry a hash you can check on
 the website.
 
@@ -527,8 +546,8 @@ names it; together the acrostics give the mailing address.
 
 All words are [prov].
 
-- **Book 1** — answer LANTERN; Mystery CINDER (the top-left word of
-  the page LANTERN survives on). Hidden acrostic: TO THE KEEPER OF THE
+- **Book 1** — answer LANTERN; Mystery CINDER (LANTERN's letter-sum 84
+  = page, 7 letters = row, 2 vowels = column). Hidden acrostic: TO THE KEEPER OF THE
   ELIMINOID — first letters of a wrapping diagonal on page 12, the
   addressee line.
 - **Book 2** — Mystery VESSEL (standard procedure, back to Book 1).

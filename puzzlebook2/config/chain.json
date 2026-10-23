@@ -99,25 +99,13 @@
             "kind": "eliminate",
             "printed": true,
             "rule": {
-                "type": "RepeatedBlockRule"
-            },
-            "note": "PLACEHOLDER keep_fraction -- reduplicated words like this are rare, but the real count hasn't been measured against this book's dictionary yet. Run bin/check.php before trusting this number.",
-            "construction": {
-                "keep_fraction": 0.99529
-            },
-            "id": 9
-        },
-        {
-            "kind": "eliminate",
-            "printed": true,
-            "rule": {
                 "type": "EndsWithIngRule"
             },
             "note": "New rule, added 2026-10-19 with ContainsChRule and AlternatingConsonantVowelRule to take load off the >500-word steps. Huge, instantly checkable catch (~3,700 raw).",
             "construction": {
                 "keep_fraction": 0.90894
             },
-            "id": 10
+            "id": 9
         },
         {
             "kind": "eliminate",
@@ -129,19 +117,7 @@
             "construction": {
                 "keep_fraction": 0.90583
             },
-            "id": 11
-        },
-        {
-            "kind": "eliminate",
-            "printed": true,
-            "rule": {
-                "type": "DoubleEFewVowelsRule"
-            },
-            "note": "Replaces plain \"contains a double E\" (ContainsDoubleERule, which matched too broadly). PLACEHOLDER keep_fraction, carried over unchanged from the old, looser rule -- the real catch here is smaller, so this will likely need to rise. Run bin/check.php before trusting it.",
-            "construction": {
-                "keep_fraction": 0.91838
-            },
-            "id": 12
+            "id": 10
         },
         {
             "kind": "eliminate",
@@ -153,7 +129,7 @@
             "construction": {
                 "keep_fraction": 0.8868
             },
-            "id": 13
+            "id": 11
         },
         {
             "kind": "eliminate",
@@ -165,7 +141,7 @@
             "construction": {
                 "keep_fraction": 0.91771
             },
-            "id": 14
+            "id": 12
         },
         {
             "kind": "eliminate",
@@ -177,31 +153,7 @@
             "construction": {
                 "keep_fraction": 0.85203
             },
-            "id": 15
-        },
-        {
-            "kind": "eliminate",
-            "printed": true,
-            "rule": {
-                "type": "ThreeDistinctLettersRule"
-            },
-            "note": "New rule. PLACEHOLDER keep_fraction -- likely to be genuinely scarce (few words repeat so few distinct letters at this length), unmeasured against this book's dictionary. Run bin/check.php before trusting it.",
-            "construction": {
-                "keep_fraction": 0.99444
-            },
-            "id": 16
-        },
-        {
-            "kind": "eliminate",
-            "printed": true,
-            "rule": {
-                "type": "FourConsonantsOneVowelRule"
-            },
-            "note": "New rule. PLACEHOLDER keep_fraction, unmeasured against this book's dictionary. Run bin/check.php before trusting it.",
-            "construction": {
-                "keep_fraction": 0.8299
-            },
-            "id": 17
+            "id": 13
         },
         {
             "kind": "eliminate",
@@ -213,7 +165,7 @@
             "construction": {
                 "keep_fraction": 0.80219
             },
-            "id": 18
+            "id": 14
         },
         {
             "kind": "eliminate",
@@ -223,9 +175,9 @@
             },
             "note": "New rule, same load-shifting batch. ~2,100 raw matches; placed next to WordLength10Rule since both are length-flavoured.",
             "construction": {
-                "keep_fraction": 0.79014
+                "keep_fraction": 0.865
             },
-            "id": 19
+            "id": 15
         },
         {
             "kind": "eliminate",
@@ -238,7 +190,7 @@
                 "keep_fraction": 0.9575,
                 "pairs": true
             },
-            "id": 20
+            "id": 16
         },
         {
             "kind": "eliminate",
@@ -251,33 +203,7 @@
                 "keep_fraction": 0.957,
                 "pairs": true
             },
-            "id": 21
-        },
-        {
-            "kind": "eliminate",
-            "printed": true,
-            "rule": {
-                "type": "MatchingNeighbourEndsRule"
-            },
-            "note": "Reinstated as a trial, per Ian's intuition that splitting a pair into a plain left cell plus a letter-dependent right cell might hide a problem. That intuition was right (fixed: now picks two real words up front, reserved, placed as literals). Capped to a small keep_fraction like its sibling pair rules, rather than left as the absorber -- EVERY literal-placed pair carries a small risk of colliding with an unrelated neighbour once actually placed (the same risk AnagramPairOnPageRule always had), and with it absorbing an unbounded leftover, SOME collision across hundreds of pairs became near-certain on every single attempt, discarding the whole thing each time. VowelRunRule (below) is the absorber now -- ordinary filler has a real fallback (try another dictionary word) that a committed literal pair doesn't.",
-            "construction": {
-                "keep_fraction": 0.95507,
-                "pairs": true
-            },
-            "id": 22
-        },
-        {
-            "kind": "eliminate",
-            "printed": true,
-            "rule": {
-                "type": "LongShortNeighbourRule"
-            },
-            "note": "New rule, Ian's second brainstormed addition. Unlike the other pair rules, needs no SPECIFIC matching word -- any 9-letter and any 3-letter word qualify -- so both halves are ordinary cells with full dictionary fallback, not a fragile reserved pair. Guarded (construction-time check + NoLengthAdjacentToOpposingLiteral invariant) against accidentally orphaning AnagramPairOnPageRule/SameEndingVerticalPairRule/MatchingNeighbourEndsRule's own fragile pairs; deliberately does NOT guard against overlapping its own matches, since clustering is the explicitly wanted behaviour here. PLACEHOLDER keep_fraction (0.97, matching its sibling pair rules' tier), unmeasured. Run bin/check.php before trusting it.",
-            "construction": {
-                "keep_fraction": 0.95448,
-                "pairs": true
-            },
-            "id": 23
+            "id": 17
         },
         {
             "kind": "eliminate",
@@ -289,19 +215,7 @@
             "construction": {
                 "keep_fraction": 0.62639
             },
-            "id": 24
-        },
-        {
-            "kind": "eliminate",
-            "printed": true,
-            "rule": {
-                "type": "VowelBothEndsRule"
-            },
-            "note": "Third of three new rules added together to bring VowelRunRule's absorbed share down from ~33/page toward the ~7/page density target. Distinct from StartsWithTwoVowelsRule (checks the first TWO letters, nothing about the last) and from AlphabetAdjacentEndsRule (alphabet adjacency, not vowel-ness). PLACEHOLDER keep_fraction (0.52, hand-traced to land ~228 cells), unmeasured. Run bin/check.php before trusting it.",
-            "construction": {
-                "keep_fraction": 0.40355
-            },
-            "id": 25
+            "id": 18
         },
         {
             "kind": "eliminate",
@@ -313,7 +227,7 @@
             "construction": {
                 "keep_fraction": 0.03459
             },
-            "id": 26
+            "id": 19
         },
         {
             "kind": "eliminate",
@@ -325,7 +239,7 @@
             "construction": {
                 "derived": true
             },
-            "id": 27
+            "id": 20
         },
         {
             "kind": "eliminate",
@@ -335,7 +249,7 @@
                 "type": "WordLength7Rule"
             },
             "note": "Clears the decoy words held back above -- and any other seven-letter word still standing, since nothing above this point spares them.",
-            "id": 28
+            "id": 21
         }
     ],
     "answer": "dragon"

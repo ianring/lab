@@ -1,8 +1,12 @@
 build/
-build.log
+*.log
+FINISHED/
 print/libs/
 data/cache/*
 !data/cache/.gitignore
-web/book.json
-web/chain.json
+preview/book.json
+preview/chain.json
 config/chain.tuned.json
+build-series.log
+plant-100.log
+config/salt.txt

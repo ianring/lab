@@ -1,0 +1,29 @@
+{
+    "_comment": "Series manifest for the 21-book Eliminoid set. Phase 1: every book uses the one canonical 20-rule chain (config/chain.json), each with its own seed so the grids differ. The Capstone (book 21) builds identically in iteration 1 because all books share the chain, so its diagonal (Rule N = Book N's Rule N) IS the canonical chain. Per-book 'answer' overrides and the Mystery/acrostic plant plan arrive in later phases (see SERIES_IMPLEMENTATION.md).",
+    "chain": "config/chain.json",
+    "total_books": 21,
+    "capstone_book": 21,
+    "books": [
+        { "n": 1,  "seed": 101 },
+        { "n": 2,  "seed": 102 },
+        { "n": 3,  "seed": 103 },
+        { "n": 4,  "seed": 104 },
+        { "n": 5,  "seed": 105 },
+        { "n": 6,  "seed": 106 },
+        { "n": 7,  "seed": 107 },
+        { "n": 8,  "seed": 108 },
+        { "n": 9,  "seed": 109 },
+        { "n": 10, "seed": 110 },
+        { "n": 11, "seed": 111 },
+        { "n": 12, "seed": 112 },
+        { "n": 13, "seed": 113 },
+        { "n": 14, "seed": 114 },
+        { "n": 15, "seed": 115 },
+        { "n": 16, "seed": 116 },
+        { "n": 17, "seed": 117 },
+        { "n": 18, "seed": 118 },
+        { "n": 19, "seed": 119 },
+        { "n": 20, "seed": 120 },
+        { "n": 21, "seed": 121 }
+    ]
+}
