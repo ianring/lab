@@ -55,18 +55,31 @@ abstract class BoggleRule extends SpellingRuleBase
         return 'words that can be traced on the printed Boggle board (' . self::MIN_LENGTH . '+ letters)';
     }
 
-    /** The printed instruction, with the board drawn out row by row. */
+    /**
+     * The printed instruction, with the board drawn out row by row. The "Qu"
+     * note is included only when the board actually has a multi-letter tile; a
+     * subclass may override this wholesale for fully bespoke copy.
+     */
     public function ruleText(): string
     {
         $rows = [];
+        $hasMultiTile = false;
         foreach ($this->board() as $row) {
+            foreach ($row as $cell) {
+                if (strlen($cell) > 1) {
+                    $hasMultiTile = true;
+                }
+            }
             $rows[] = implode(' ', array_map(static fn (string $c): string => ucfirst($c), $row));
         }
-        return "Here is a letter board:\n" . implode("\n", $rows) . "\n\n"
+        $text = "Here is a letter board:\n" . implode("\n", $rows) . "\n\n"
             . 'Cross out every word of ' . self::MIN_LENGTH . ' or more letters that you can trace on it: '
             . 'start on any square, move to a touching square (sideways, up, down, or diagonally), and keep '
-            . 'going, spelling the word one square at a time. You may not use the same square twice in one '
-            . 'word. The "Qu" square counts as the two letters Q and U together.';
+            . 'going, spelling the word one square at a time. You may not use the same square twice in one word.';
+        if ($hasMultiTile) {
+            $text .= ' The "Qu" square counts as the two letters Q and U together.';
+        }
+        return $text;
     }
 
     /** @return array<string,bool> */

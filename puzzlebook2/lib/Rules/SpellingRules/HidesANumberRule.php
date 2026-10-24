@@ -26,7 +26,8 @@ final class HidesANumberRule extends SpellingRuleBase
     public function ruleText(): string
     {
         return 'Cross out every word of FOUR OR MORE letters that hides a counting number spelled out inside it -- '
-            . 'ONE, TWO, THREE and so on up to TEN (also ZERO), its letters sitting together in a row (hONEst, '
-            . 'ofTEN, sTONE). The word itself must not simply be that number. A word hiding no number is safe.';
+            . 'ONE, TWO, THREE and so on up to TEN (also ZERO), its letters sitting together in a row '
+            . '(`H<u>ONE</u>ST`, `OF<u>TEN</u>`, `AR<u>TWO</u>RK`, `SL<u>EIGHT</u>`). The word itself must not '
+            . 'simply be that number. A word hiding no number is safe.';
     }
 }

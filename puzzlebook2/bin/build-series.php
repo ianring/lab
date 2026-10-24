@@ -69,68 +69,64 @@ $print = $layout['print'] ?? [];
 $capstone = (int) ($series['capstone_book'] ?? 0);
 $total = (int) ($series['total_books'] ?? count($series['books']));
 
-// ---- pick 21 DISTINCT answers (survivors of the shared spelling-rule set) --
-// All books share the same 20 rule TYPES (only their order differs), so the
-// dictionary-level survivor set is the same for every book; we draw distinct
-// answers from it. Book 1 additionally needs letter-sum <= pages (its Mystery
-// page is that sum).
-$sample = ChainVariant::forBook(1, 'placeholder');
-$spellingRules = [];
-$finalRule = null;
-foreach ($sample['steps'] as $step) {
-    $rule = Engine::ruleFromConfig($step['rule']);
-    if ($rule instanceof SpellingRuleBase) {
-        if (!empty($step['final'])) {
-            $finalRule = $rule;
-        } else {
-            $spellingRules[] = $rule;
-        }
-    }
-}
-$survivors = [];
-foreach ($dictionary->all() as $w) {
-    if ($finalRule !== null && $finalRule->failsWord($w)) {
-        continue;
-    }
-    foreach ($spellingRules as $r) {
-        if ($r->failsWord($w)) {
-            continue 2;
-        }
-    }
-    $survivors[] = $w;
-}
-$survivors = Rng::shuffle($survivors, 4242);
-
+// ---- pick 21 DISTINCT answers, each surviving its OWN book's rules ----------
+// Books now differ (a different rule subset each), so every answer must survive
+// its own book. Book 1 additionally needs letter-sum <= pages (its Mystery page).
 $checksumOf = static fn (string $w): int => array_sum(array_map(static fn ($c): int => ord($c) - 96, str_split($w)));
+$chains = ChainVariant::composeSeries($total, $capstone);
+$survivorsFor = static function (array $chain) use ($dictionary): array {
+    $spelling = [];
+    $final = null;
+    foreach ($chain['steps'] as $step) {
+        $rule = Engine::ruleFromConfig($step['rule']);
+        if ($rule instanceof SpellingRuleBase) {
+            if (!empty($step['final'])) {
+                $final = $rule;
+            } else {
+                $spelling[] = $rule;
+            }
+        }
+    }
+    $out = [];
+    foreach ($dictionary->all() as $w) {
+        if ($final !== null && $final->failsWord($w)) {
+            continue;
+        }
+        foreach ($spelling as $r) {
+            if ($r->failsWord($w)) {
+                continue 2;
+            }
+        }
+        $out[] = $w;
+    }
+    return $out;
+};
+
 $answers = [];
 $used = [];
-foreach ($survivors as $w) {   // Book 1 first: constrained by the checksum page
-    $cs = $checksumOf($w);
-    $vow = preg_match_all('/[aeiou]/', $w);
-    if ($cs >= 1 && $cs <= $spec->pages && strlen($w) <= $spec->rows && $vow >= 1 && $vow <= $spec->cols) {
-        $answers[1] = $w;
-        $used[$w] = true;
+foreach (range(1, $total) as $n) {   // Book 1 first naturally; order doesn't matter for distinctness
+    $surv = Rng::shuffle($survivorsFor($chains[$n]), 4242 + $n);
+    $picked = null;
+    foreach ($surv as $w) {
+        if (isset($used[$w])) {
+            continue;
+        }
+        if ($n === 1) {
+            $cs = $checksumOf($w);
+            $vow = preg_match_all('/[aeiou]/', $w);
+            if (!($cs >= 1 && $cs <= $spec->pages && strlen($w) <= $spec->rows && $vow >= 1 && $vow <= $spec->cols)) {
+                continue;
+            }
+        }
+        $picked = $w;
         break;
     }
-}
-if (!isset($answers[1])) {
-    fwrite(STDERR, "No survivor word works as Book 1's answer (needs letter-sum <= {$spec->pages}).\n");
-    exit(2);
-}
-$bn = 2;
-foreach ($survivors as $w) {
-    if ($bn > $total) {
-        break;
+    if ($picked === null) {
+        fwrite(STDERR, "Book {$n}: no distinct surviving answer found" . ($n === 1 ? " (needs letter-sum <= {$spec->pages})" : '') . ".\n");
+        exit(2);
     }
-    if (!isset($used[$w])) {
-        $answers[$bn] = $w;
-        $used[$w] = true;
-        $bn++;
-    }
-}
-if (count($answers) < $total) {
-    fwrite(STDERR, sprintf("Only %d distinct survivor answers, need %d.\n", count($answers), $total));
-    exit(2);
+    $answers[$n] = $picked;
+    $used[$picked] = true;
 }
 
 // ---- plan the whole series (Mystery chain) before solving anything --------
@@ -191,20 +187,18 @@ foreach ($series['books'] as $bookCfg) {
     // This book's own chain: the Capstone gets the borrowed diagonal, every
     // other book a middle rotated by its number. AutoTuner rebalances it for
     // that order before the solve ("the software does the intelligent work").
-    $composed = $n === $capstone
-        ? ChainVariant::forCapstone($answers[$n])
-        : ChainVariant::forBook($n, $answers[$n]);
+    $composed = $chains[$n];
+    $composed['answer'] = $answers[$n];
     $tuned = AutoTuner::tune($composed, $spec, $bookDict, $baseSeed);
     $thisChain = $tuned['chain'];
-    // The middle tier sits after the spine, plus the flavor tier in normal
-    // books (the Capstone has no flavor tier).
-    $middleOffset = ChainVariant::spineCount() + ($n === $capstone ? 0 : ChainVariant::flavorCount());
-    $middleOrder = [];
-    foreach (array_slice($thisChain['steps'], $middleOffset, ChainVariant::middleCount()) as $s) {
-        $middleOrder[] = preg_replace('/Rule$/', '', $s['rule']['type']);
+    $types = [];
+    foreach ($thisChain['steps'] as $s) {
+        if (!empty($s['printed'])) {
+            $types[] = preg_replace('/Rule$/', '', $s['rule']['type']);
+        }
     }
-    fwrite(STDERR, "{$label}: middle order [" . implode(', ', array_slice($middleOrder, 0, 4))
-        . ", ...], " . count($tuned['changes']) . " auto-tune change(s)\n");
+    fwrite(STDERR, sprintf("%s: %d rules [%s, ...], %d auto-tune change(s)\n",
+        $label, count($types), implode(', ', array_slice($types, 0, 6)), count($tuned['changes'])));
 
     $built = false;
     foreach ([$baseSeed, $baseSeed + 1000, $baseSeed + 2000] as $attempt => $seed) {

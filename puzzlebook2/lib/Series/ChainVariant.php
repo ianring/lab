@@ -4,187 +4,351 @@ declare(strict_types=1);
 
 namespace Puzzlebook2\Series;
 
+use Puzzlebook2\Solver\Rng;
+
 /**
- * Builds each book's elimination chain out of one shared pool, so no two books
- * are the same puzzle -- while keeping the Capstone's diagonal valid.
+ * Composes a DIFFERENT, varied, interleaved elimination chain for every book.
  *
- * Shape of a NORMAL book (books 1-20) -- about 35 printed rules:
- *   positions 1-7    fixed SPINE   -- the scarce/structural rules, always first,
- *                                     always in this order (they need a near-full
- *                                     pool, so they can't move late)
- *   positions 8-22   FLAVOR (15)   -- low-cardinality substring cards, in FIXED
- *                                     ascending-supply order (see note below).
- *                                     These are what "more rules, smaller bites"
- *                                     buys: fifteen surgical cuts of ~130-200
- *                                     cells each, so the chunky rules downstream
- *                                     shrink and the per-rule cardinality drops.
- *   positions 23-33  MIDDLE (11)   -- the same eleven rules in every book, but
- *                                     CYCLICALLY ROTATED by the book number, so
- *                                     each book eliminates in a different order
- *   position  34     VowelRun      -- the absorber (last keep_fraction), fixed
- *   position  35     WordLength7   -- the final sweep, fixed
- *   (an unprinted DecoyLength7 sits between 34 and 35)
+ * The rules of the whole library are tagged by MECHANISM FAMILY and by their
+ * dictionary supply (how many words each can cross out). For each book we:
+ *   1. SELECT a diverse subset (seeded by book number) -- Contains* substring
+ *      cards are capped to a small minority, incompatible/overlapping pairs are
+ *      never taken together, and a few high-supply "workhorses" are guaranteed
+ *      so the cascade can tile the board.
+ *   2. ORDER it by INTERLEAVING families so no two adjacent rules share a
+ *      mechanism -- every rule feels different from the one before it, and you
+ *      never see a run of Contains cards.
+ *   3. SEED keep_fractions from supply (scarce rules take little, workhorses
+ *      carry the bulk); AutoTuner polishes each book's cascade before it builds.
+ * Each book ends with the universal VowelRun absorber + an unprinted decoy + the
+ * WordLength7 final sweep (kept in every book so planted Mystery/acrostic/bomb
+ * words -- all short, adjacent-vowel -- are reliably eliminable everywhere).
  *
- * The CAPSTONE (book 21) is DELIBERATELY leaner -- no flavor tier, just the
- * 20-rule diagonal (SPINE + MIDDLE-in-diagonal-order + absorber + final). That
- * keeps the "20 books, 20 clues" diagonal exactly as elegant as before, and its
- * rules are the chunky ones on purpose. Because the Capstone's spelling rules
- * are a SUBSET of every normal book's, any answer that survives a normal book
- * also survives the Capstone -- so the shared survivor set the builder draws
- * answers from stays valid.
- *
- * Why the flavor tier keeps the Capstone sound: the diagonal borrows Rule N
- * from Book N, and the Capstone is assembled directly from SPINE + MIDDLE
- * (forCapstone), so the flavor cards -- which never appear in the Capstone --
- * cannot touch the diagonal's distinctness. Every rule the Capstone names still
- * appears in the book it is borrowed from (all 20 live in every normal book).
- *
- * Why the rotation keeps the diagonal distinct: positions in SPINE / absorber /
- * final are the same rule in every book, so along the diagonal they contribute
- * distinct types (one per position). The middle is 11 positions rotated by the
- * book number; because 11 is coprime with the rotation step, Book N's rule at
- * its diagonal position walks all 11 middle rules exactly once -- so the whole
- * diagonal is 20 DISTINCT rules, which is what ChainPlan requires.
- *
- * FLAVOR ORDER IS LOAD-BEARING. The cards are listed by ascending dictionary
- * supply on purpose. If card A's needle is a substring of card B's needle (e.g.
- * 'gh' inside 'ough'), then A matches a superset of B, so A is more abundant and
- * sorts LATER. Running the scarcer card first therefore guarantees no card ever
- * empties a later card's pool. Keep this list sorted by supply, scarcest first.
- *
- * keep_fractions are seed values; AutoTuner rebalances each book's chain for its
- * own order before it is built ("the software does the intelligent work").
+ * Because every book draws a different subset in a different order, the books
+ * are genuinely different puzzles; build-series.php picks each book's answer from
+ * its OWN survivor set.
  */
 final class ChainVariant
 {
-    /**
-     * The one book (1..20) that carries the BOOM trigger-reaction. Its chain
-     * gets an extra BoomReactionRule step after the final sweep, and the builder
-     * plants BOOM bombs + their 3x3 blocks there (see SeriesPlanner and
-     * bin/build-series.php). Null-like 0 would mean "no book". Only this book
-     * differs; the other twenty build exactly as before.
-     */
+    /** The one book (1..20) that also carries the BOOM trigger-reaction. */
     public const REACTION_BOOK = 7;
 
-    /** @var array<int,array{type:string,kf:float}> positions 1-7, fixed */
-    private const SPINE = [
-        ['type' => 'PalindromeRule', 'kf' => 0.9957],
-        ['type' => 'UsesOnlyLettersRule', 'kf' => 0.9897],
-        ['type' => 'CornerContainsLetterRule', 'kf' => 0.98298],
-        ['type' => 'AlphabetAdjacentEndsRule', 'kf' => 0.966],
-        ['type' => 'RepeatedLetterRule', 'kf' => 0.9909],
-        ['type' => 'AlphabeticalOrderRule', 'kf' => 0.983],
-        ['type' => 'LetterCountRule', 'kf' => 0.95002],
+    private const NS = 'Puzzlebook2\\Rules\\SpellingRules\\';
+    private const ABSORBER = 'VowelRunRule';
+    private const FINAL = 'WordLength7Rule';
+
+    /** Selectable rules: type => [family, dictionary supply]. (Absorber + final are reserved, not here.) */
+    private const POOL = [
+        'AbbaPatternRule' => ['shape', 18, 'once'],
+        'AnagramHalvesRule' => ['shape', 31, 'once'],
+        'NoVowelsRule' => ['letterset', 101, 'once'],
+        'RepeatedBlockRule' => ['shape', 107, 'once'],
+        'PalindromeRule' => ['shape', 108],
+        'MusicalNotesRule' => ['letterset', 127, 'once'],
+        'ContainsOughRule' => ['substring', 179],
+        'ThreeDistinctLettersRule' => ['shape', 208],
+        'RepeatedLetterRule' => ['doubles', 225],
+        'UsesOnlyLettersRule' => ['letterset', 258],
+        'ContainsSchRule' => ['substring', 266],
+        'AlternatingVowelRule' => ['vcrun', 277],
+        'ReverseAlphabeticalOrderRule' => ['order', 283],
+        'ContainsKnRule' => ['substring', 324],
+        'ContainsWrRule' => ['substring', 333],
+        'ContainsDgeRule' => ['substring', 334],
+        'ContainsSqRule' => ['substring', 349],
+        'AlphabeticalOrderRule' => ['order', 380],
+        'ContainsThrRule' => ['substring', 419],
+        'AllFiveVowelsRule' => ['hidden', 548],
+        'ContainsGhtRule' => ['substring', 576],
+        'ContainsNchRule' => ['substring', 581],
+        'ContainsRhRule' => ['substring', 596],
+        'ContainsSwRule' => ['substring', 620],
+        'ContainsTchRule' => ['substring', 635],
+        'BoggleBoxRule' => ['boggle', 669, 'once'],
+        'BoggleValeRule' => ['boggle', 614, 'once'],
+        'BoggleReefRule' => ['boggle', 435, 'once'],
+        'BoggleMoorRule' => ['boggle', 382, 'once'],
+        'BoggleGladeRule' => ['boggle', 381, 'once'],
+        'ContainsWhRule' => ['substring', 729],
+        'ContainsOeRule' => ['substring', 751],
+        'ContainsSkRule' => ['substring', 776],
+        'AlphabetAdjacentEndsRule' => ['ends', 807],
+        'ContainsFrRule' => ['substring', 897],
+        'ConsecutiveAlphabetRunRule' => ['hidden', 967],
+        'ContainsNkRule' => ['substring', 1014],
+        'ContainsGhRule' => ['substring', 1050],
+        'ContainsSlRule' => ['substring', 1170],
+        'ContainsStrRule' => ['substring', 1171],
+        'ContainsTionRule' => ['substring', 1310],
+        'LetterCountRule' => ['length', 1331],
+        'ContainsMbRule' => ['substring', 1476],
+        'ContainsDrRule' => ['substring', 1545],
+        'ContainsFlRule' => ['substring', 1597],
+        'StackedDoublesRule' => ['doubles', 1602],
+        'DoubleEFewVowelsRule' => ['doubles', 1674],
+        'ContainsClRule' => ['substring', 1703],
+        'ContainsQuRule' => ['substring', 1762],
+        'ConsonantRunRule' => ['vcrun', 1938],
+        'ContainsMpRule' => ['substring', 1938],
+        'ContainsBrRule' => ['substring', 1953],
+        'ContainsGrRule' => ['substring', 1982],
+        'FourConsonantsOneVowelRule' => ['vcrun', 2142],
+        'AlternatingConsonantVowelRule' => ['vcrun', 2148],
+        'StartsWithTwoVowelsRule' => ['vcrun', 2269],
+        'ContainsPlRule' => ['substring', 2435],
+        'ContainsCrRule' => ['substring', 2577],
+        'HidesANumberRule' => ['hidden', 2584],
+        'ContainsSpRule' => ['substring', 2610],
+        'ContainsScRule' => ['substring', 2716],
+        'ContainsCkRule' => ['substring', 2867],
+        'ContainsPhRule' => ['substring', 3128],
+        'StraightLineLettersRule' => ['letterset', 3353],
+        'EndsWithIngRule' => ['ending', 3715],
+        'ContainsZRule' => ['substring', 3724],
+        'ContainsPrRule' => ['substring', 3836],
+        'ContainsBlRule' => ['substring', 3974],
+        'ContainsShRule' => ['substring', 4700],
+        'ContainsTrRule' => ['substring', 5281],
+        'ContainsChRule' => ['substring', 5541],
+        'BothEndPairsInSetRule' => ['ends', 5882],
+        'ContainsNgRule' => ['substring', 7181],
+        'VowelBothEndsRule' => ['ends', 7786],
+        'LongIsogramRule' => ['shape', 10600],
+        'DoubledConsonantRule' => ['doubles', 21282],
+        'WordLength10Rule' => ['length', 27928],
     ];
+
+    /** Pairs that build fine together but overlap too much to be interesting in one book (not hard-incompatible). */
+    private const AVOID_TOGETHER = [
+        'DoubledConsonantRule' => ['StackedDoublesRule', 'RepeatedLetterRule'],
+        'StackedDoublesRule' => ['DoubledConsonantRule'],
+        'RepeatedLetterRule' => ['DoubledConsonantRule'],
+    ];
+
+    private const WORKHORSE_MIN_SUPPLY = 3000;
+    private const BOARD_REF = 12500;
 
     /**
-     * Low-cardinality substring cards, FIXED ascending-supply order (see the
-     * class note: this order is what makes the family collision-free). Seed
-     * keep_fractions were computed to take ~130-200 cells each against the pool
-     * remaining after the spine (~10,800), every target comfortably under the
-     * card's dictionary supply. The scarcest card (ough, supply 179) takes 134.
+     * Compose the WHOLE series at once, so single-use (`once`) rules are consumed
+     * across books -- each lands in exactly one book, which scatters the Boggle
+     * boards and other showpieces. Reusable rules fill the rest, a different
+     * subset and order per book. Returns [bookNo => chain] with a placeholder
+     * answer (build-series picks each book's real answer from its own survivors).
      *
-     * None of these is subsumed by a rule elsewhere in the book, so each adds a
-     * genuinely new cut -- NOT tch/nch/sch (all subsets of the middle's ch) nor
-     * gh (a superset of ough/ght). bin/compute-incompatibilities.php is the
-     * authority; the per-rule INCOMPATIBLE_WITH consts reflect it.
-     *
-     * @var array<int,array{type:string,kf:float}>
+     * @return array<int,array{steps: array, answer: string}>
      */
-    private const FLAVOR = [
-        ['type' => 'ContainsOughRule', 'kf' => 0.98762], // supply  179
-        ['type' => 'ContainsKnRule',   'kf' => 0.98138], // supply  324
-        ['type' => 'ContainsWrRule',   'kf' => 0.98094], // supply  333
-        ['type' => 'ContainsDgeRule',  'kf' => 0.98057], // supply  334
-        ['type' => 'ContainsSqRule',   'kf' => 0.98018], // supply  349
-        ['type' => 'ContainsThrRule',  'kf' => 0.97978], // supply  419
-        ['type' => 'ContainsGhtRule',  'kf' => 0.97936], // supply  576
-        ['type' => 'ContainsRhRule',   'kf' => 0.97893], // supply  596
-        ['type' => 'ContainsSwRule',   'kf' => 0.97847], // supply  620
-        ['type' => 'ContainsWhRule',   'kf' => 0.97800], // supply  729
-        ['type' => 'ContainsOeRule',   'kf' => 0.97751], // supply  751
-        ['type' => 'ContainsSkRule',   'kf' => 0.97699], // supply  776
-        ['type' => 'ContainsFrRule',   'kf' => 0.97645], // supply  897
-        ['type' => 'ContainsNkRule',   'kf' => 0.97588], // supply 1014
-        ['type' => 'ContainsSlRule',   'kf' => 0.97528], // supply 1170
-    ];
-
-    /** @var array<int,array{type:string,kf:float}> the 11 rotated middle rules */
-    private const MIDDLE = [
-        ['type' => 'ConsonantRunRule', 'kf' => 0.9215],
-        ['type' => 'EndsWithIngRule', 'kf' => 0.90894],
-        ['type' => 'ContainsZRule', 'kf' => 0.90583],
-        ['type' => 'DoubleEFewVowelsRule', 'kf' => 0.91838],
-        ['type' => 'BothEndPairsInSetRule', 'kf' => 0.8868],
-        ['type' => 'StartsWithTwoVowelsRule', 'kf' => 0.91771],
-        ['type' => 'ContainsChRule', 'kf' => 0.85203],
-        ['type' => 'FourConsonantsOneVowelRule', 'kf' => 0.8299],
-        ['type' => 'WordLength10Rule', 'kf' => 0.80219],
-        ['type' => 'AlternatingConsonantVowelRule', 'kf' => 0.79014],
-        ['type' => 'DoubledConsonantRule', 'kf' => 0.62639],
-    ];
-
-    private const ABSORBER = ['type' => 'VowelRunRule', 'kf' => 0.03459];
-
-    public static function middleCount(): int
+    public static function composeSeries(int $total, int $capstoneBook): array
     {
-        return count(self::MIDDLE);
-    }
-
-    public static function flavorCount(): int
-    {
-        return count(self::FLAVOR);
-    }
-
-    public static function spineCount(): int
-    {
-        return count(self::SPINE);
-    }
-
-    /** A normal book: spine, the flavor tier, then the middle rotated so book N starts the cycle at offset N. */
-    public static function forBook(int $bookNo, string $answer): array
-    {
-        $order = [];
-        $n = count(self::MIDDLE);
-        for ($q = 0; $q < $n; $q++) {
-            $order[] = self::MIDDLE[($q + $bookNo) % $n];
-        }
-        return self::assemble($order, $answer, true, $bookNo === self::REACTION_BOOK);
-    }
-
-    /**
-     * The Capstone: no flavor tier (kept lean and chunky on purpose). Its middle
-     * is the diagonal -- Rule (8+q) is Book (8+q)'s rule at position 8+q, i.e.
-     * MIDDLE[(2q + 8) % n] for q = 0..n-1, a permutation of the middle (11
-     * coprime with 2), so the whole diagonal is distinct. Reproduced here
-     * directly so the Capstone's printed chain IS the borrowed diagonal.
-     */
-    public static function forCapstone(string $answer): array
-    {
-        $order = [];
-        $n = count(self::MIDDLE);
-        for ($q = 0; $q < $n; $q++) {
-            $order[] = self::MIDDLE[(2 * $q + 8) % $n];
-        }
-        return self::assemble($order, $answer, false, false);
-    }
-
-    /** @param array<int,array{type:string,kf:float}> $middleOrder */
-    private static function assemble(array $middleOrder, string $answer, bool $withFlavor, bool $withReaction = false): array
-    {
-        $steps = [];
-        foreach (self::SPINE as $r) {
-            $steps[] = self::eliminate($r['type'], $r['kf']);
-        }
-        if ($withFlavor) {
-            foreach (self::FLAVOR as $r) {
-                $steps[] = self::eliminate($r['type'], $r['kf']);
+        $once = [];
+        $reuse = [];
+        foreach (self::POOL as $type => $meta) {
+            if (($meta[2] ?? 'reuse') === 'once') {
+                $once[] = $type;
+            } else {
+                $reuse[] = $type;
             }
         }
-        foreach ($middleOrder as $r) {
-            $steps[] = self::eliminate($r['type'], $r['kf']);
+        // Spread the single-use rules EVENLY across all books (shuffled first,
+        // so which showpiece lands where varies) -- scattered every few books.
+        $once = Rng::shuffle($once, 55555);
+        $assigned = array_fill(1, $total, []);
+        $n = max(1, count($once));
+        foreach ($once as $i => $type) {
+            $assigned[1 + (int) floor($i * $total / $n)][] = $type;
         }
-        $steps[] = self::eliminate(self::ABSORBER['type'], self::ABSORBER['kf']);
+
+        $chains = [];
+        for ($n = 1; $n <= $total; $n++) {
+            $count = $n === $capstoneBook ? 20 : 30;
+            $selected = self::fillSelection(Rng::shuffle($reuse, $n), $count, $assigned[$n]);
+            $ordered = self::interleave($selected, $n);
+            $chains[$n] = self::assemble($ordered, 'placeholder', $n === self::REACTION_BOOK);
+        }
+        return $chains;
+    }
+
+    /** A single book, ignoring cross-book single-use (for inspection/tests). */
+    public static function forBook(int $bookNo, string $answer): array
+    {
+        $selected = self::fillSelection(Rng::shuffle(array_keys(self::POOL), $bookNo), 30);
+        $ordered = self::interleave($selected, $bookNo);
+        return self::assemble($ordered, $answer, $bookNo === self::REACTION_BOOK);
+    }
+
+    /** The Capstone, standalone: leaner (fewer, chunkier rules). */
+    public static function forCapstone(string $answer): array
+    {
+        $selected = self::fillSelection(Rng::shuffle(array_keys(self::POOL), 9001), 20);
+        $ordered = self::interleave($selected, 9001);
+        return self::assemble($ordered, $answer, false);
+    }
+
+    /**
+     * Pick $count diverse rules for a book: Contains* a minority, no two rules
+     * that are incompatible or heavily overlapping, at least three workhorses so
+     * the cascade has the supply to tile.
+     *
+     * @return string[] selected rule types
+     */
+    private static function fillSelection(array $order, int $count, array $selected = []): array
+    {
+        $maxSubstring = (int) ceil($count * 0.18);   // Contains* kept a clear minority
+        $substrings = 0;
+        $workhorses = 0;
+        foreach ($selected as $s) {
+            if (self::POOL[$s][0] === 'substring') {
+                $substrings++;
+            }
+            if (self::POOL[$s][1] >= self::WORKHORSE_MIN_SUPPLY) {
+                $workhorses++;
+            }
+        }
+
+        $canAdd = static function (string $cand) use (&$selected): bool {
+            $bad = array_merge(self::incompatibles($cand), self::AVOID_TOGETHER[$cand] ?? []);
+            foreach ($selected as $s) {
+                if (in_array($s, $bad, true) || in_array($cand, self::incompatibles($s), true)
+                    || in_array($cand, self::AVOID_TOGETHER[$s] ?? [], true)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        foreach ($order as $cand) {
+            if (count($selected) >= $count) {
+                break;
+            }
+            if (in_array($cand, $selected, true)) {
+                continue; // already seeded (a single-use rule assigned to this book)
+            }
+            $fam = self::POOL[$cand][0];
+            if ($fam === 'substring' && $substrings >= $maxSubstring) {
+                continue;
+            }
+            if (!$canAdd($cand)) {
+                continue;
+            }
+            $selected[] = $cand;
+            if ($fam === 'substring') {
+                $substrings++;
+            }
+            if (self::POOL[$cand][1] >= self::WORKHORSE_MIN_SUPPLY) {
+                $workhorses++;
+            }
+        }
+
+        // Guarantee enough high-supply rules for feasibility.
+        if ($workhorses < 3) {
+            foreach ($order as $cand) {
+                if ($workhorses >= 3) {
+                    break;
+                }
+                if (in_array($cand, $selected, true) || self::POOL[$cand][1] < self::WORKHORSE_MIN_SUPPLY || !$canAdd($cand)) {
+                    continue;
+                }
+                $selected[] = $cand;
+                $workhorses++;
+            }
+        }
+        return $selected;
+    }
+
+    /**
+     * Order the selection so no two adjacent rules share a family (greedy: always
+     * take the most-plentiful family that is not the previous one).
+     *
+     * @param string[] $types
+     * @return string[]
+     */
+    private static function interleave(array $types, int $seed): array
+    {
+        $byFam = [];
+        foreach ($types as $t) {
+            $byFam[self::POOL[$t][0]][] = $t;
+        }
+        foreach ($byFam as $f => $list) {
+            $byFam[$f] = Rng::shuffle($list, $seed + (int) (crc32($f) & 0x7fffffff));
+        }
+
+        $out = [];
+        $lastFam = null;
+        $n = count($types);
+        while (count($out) < $n) {
+            $best = null;
+            $bestCount = -1;
+            foreach ($byFam as $f => $list) {
+                if ($f === $lastFam || $list === []) {
+                    continue;
+                }
+                if (count($list) > $bestCount) {
+                    $bestCount = count($list);
+                    $best = $f;
+                }
+            }
+            if ($best === null) { // only the previous family remains -- unavoidable repeat
+                foreach ($byFam as $f => $list) {
+                    if ($list !== []) {
+                        $best = $f;
+                        break;
+                    }
+                }
+            }
+            $out[] = array_pop($byFam[$best]);
+            $lastFam = $best;
+        }
+        return $out;
+    }
+
+    /** Supply-aware seed keep_fractions: scarce rules take little, workhorses carry the bulk. */
+    private static function seedKeepFractions(array $types): array
+    {
+        $absorberReserve = 1500;
+        $targetTotal = (int) (self::BOARD_REF * 0.98) - $absorberReserve;
+        $caps = [];
+        foreach ($types as $t) {
+            $caps[$t] = max(1, (int) floor(0.75 * self::POOL[$t][1]));
+        }
+        // Binary-search the uniform target u so sum(min(cap, u)) == targetTotal.
+        $lo = 1;
+        $hi = $targetTotal;
+        for ($i = 0; $i < 40; $i++) {
+            $u = intdiv($lo + $hi, 2);
+            $sum = 0;
+            foreach ($caps as $c) {
+                $sum += min($c, $u);
+            }
+            if ($sum < $targetTotal) {
+                $lo = $u + 1;
+            } else {
+                $hi = $u;
+            }
+        }
+        $u = $hi;
+
+        $kf = [];
+        $rem = self::BOARD_REF;
+        foreach ($types as $t) {
+            $b = min($caps[$t], $u, $rem - 1);
+            $b = max(1, $b);
+            $kf[$t] = round(1 - $b / $rem, 5);
+            $rem -= $b;
+        }
+        return $kf;
+    }
+
+    /**
+     * @param string[] $orderedTypes
+     * @return array{steps: array, answer: string}
+     */
+    private static function assemble(array $orderedTypes, string $answer, bool $withReaction): array
+    {
+        $kf = self::seedKeepFractions($orderedTypes);
+        $steps = [];
+        foreach ($orderedTypes as $type) {
+            $steps[] = self::eliminate($type, $kf[$type]);
+        }
+        $steps[] = self::eliminate(self::ABSORBER, 0.04);   // absorber: ChainPlan overrides its budget
         $steps[] = [
             'kind' => 'eliminate',
             'printed' => false,
@@ -195,11 +359,9 @@ final class ChainVariant
             'kind' => 'eliminate',
             'printed' => true,
             'final' => true,
-            'rule' => ['type' => 'WordLength7Rule'],
+            'rule' => ['type' => self::FINAL],
         ];
         if ($withReaction) {
-            // Runs last, after the trigger has already been crossed, so the
-            // explosion fires on the real board. Owns no cells (derived, 0 budget).
             $steps[] = [
                 'kind' => 'eliminate',
                 'printed' => true,
@@ -224,5 +386,13 @@ final class ChainVariant
             'rule' => ['type' => $type],
             'construction' => ['keep_fraction' => $keepFraction],
         ];
+    }
+
+    /** @return string[] the INCOMPATIBLE_WITH list declared on a rule class, if any. */
+    private static function incompatibles(string $type): array
+    {
+        $fqcn = self::NS . $type;
+        $const = $fqcn . '::INCOMPATIBLE_WITH';
+        return defined($const) ? constant($const) : [];
     }
 }

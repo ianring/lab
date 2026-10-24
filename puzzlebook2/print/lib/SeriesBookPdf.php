@@ -186,17 +186,60 @@ final class SeriesBookPdf extends \FPDF
             $number++;
             $text = $step['rule_text'] ?? $step['rule']['type'];
 
-            $bodyLines = $this->countWrappedLines($text, $this->contentWidth(), 10);
+            $bodyLines = $this->countWrappedLines($this->stripRichMarkup($text), $this->contentWidth(), 10);
             $blockH = 5.2 + $bodyLines * 4.7 + 3.8;
             if ($this->GetY() + $blockH > $this->trimH - 14) {
                 $this->AddPage();
             }
             $this->SetFont($this->fontFamily, 'B', 10.5);
             $this->Cell(0, 5.2, "Rule {$number}", 0, 2);
-            $this->SetFont($this->fontFamily, '', 10);
-            $this->MultiCell(0, 4.7, $text, 0, 'J');
+            $this->writeRich($text, 4.7, 10);
             $this->Ln(3.8);
         }
+    }
+
+    /**
+     * Writes a rule body that may carry inline markup: `...` renders in the grid
+     * (Courier) font -- the same face the puzzle words are set in -- and
+     * <u>...</u> underlines. Flowed with Write() so the typeface and underline
+     * can change mid-paragraph. Left-aligned (Write() cannot justify).
+     */
+    private function writeRich(string $text, float $h, float $pt): void
+    {
+        $mono = false;
+        $underline = false;
+        $buffer = '';
+        $flush = function () use (&$buffer, &$mono, &$underline, $h, $pt): void {
+            if ($buffer === '') {
+                return;
+            }
+            $this->SetFont($mono ? $this->gridFamily : $this->fontFamily, $underline ? 'U' : '', $pt);
+            $this->Write($h, $buffer);
+            $buffer = '';
+        };
+        for ($i = 0, $len = strlen($text); $i < $len; $i++) {
+            if ($text[$i] === '`') {
+                $flush();
+                $mono = !$mono;
+            } elseif (substr($text, $i, 3) === '<u>') {
+                $flush();
+                $underline = true;
+                $i += 2;
+            } elseif (substr($text, $i, 4) === '</u>') {
+                $flush();
+                $underline = false;
+                $i += 3;
+            } else {
+                $buffer .= $text[$i];
+            }
+        }
+        $flush();
+        $this->Ln($h);
+    }
+
+    private function stripRichMarkup(string $text): string
+    {
+        return str_replace(['`', '<u>', '</u>'], '', $text);
     }
 
     // ------------------------------------------------------------- real body
