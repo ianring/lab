@@ -12,6 +12,8 @@ final class ContainsGhtRule extends ContainsSubstringRule
 
 
 
+
+
     public function __construct()
     {
         parent::__construct('ght');

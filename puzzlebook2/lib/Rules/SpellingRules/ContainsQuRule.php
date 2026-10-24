@@ -12,6 +12,8 @@ final class ContainsQuRule extends ContainsSubstringRule
 
 
 
+
+
     public function __construct()
     {
         parent::__construct('qu');

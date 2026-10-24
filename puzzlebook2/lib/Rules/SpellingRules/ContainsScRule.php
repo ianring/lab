@@ -12,6 +12,8 @@ final class ContainsScRule extends ContainsSubstringRule
 
 
 
+
+
     public function __construct()
     {
         parent::__construct('sc');

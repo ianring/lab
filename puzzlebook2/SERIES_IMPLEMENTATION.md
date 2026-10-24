@@ -473,3 +473,63 @@ way a divergent chain might break a FIND or strand a plant.
   coincidences. Current plan draws distinct answers; cheap to relax.
 - **Open: how many books carry place-acrostics, and which pages?** SERIES-MAP
   lists them `[prov]`; the planner needs the final list to assign them.
+
+## 13. Deferred — MAYBE TODO: load-bearing trigger-reaction (BOOM Path 2)
+
+*Revisit once the books are near final shape. Not needed to ship; it upgrades a
+mechanic we will already have shipped in a cosmetic form.*
+
+**The mechanic.** A "trigger-reaction" rule: while eliminating, crossing out a
+word that has a chosen rare+spottable property (we picked **contains "boom"** —
+25 words in the whole dictionary, instantly recognizable, thematically a *boom*)
+sets off a 3×3 explosion that also crosses out its eight neighbours. Stated once
+and triggered by whatever rule happens to cross the trigger word (e.g. a BOOM
+word is auto-eliminated by `VowelRunRule` via its "oo"). Exactly one book in the
+series carries it.
+
+**Why it's safe to mix with coupled-pair rules (the thing we were worried
+about).** An explosion must never pre-empt one half of a planned pair (anagram /
+semordnilap / behead / peel), or that pair rule won't fire and the outcome goes
+order-dependent. The guarantee is *spatial, not temporal*: reserve every bomb's
+3×3 block as owned cells, and the solver — which never fills an owned cell —
+places every pair word outside every block. No pair word can ever be adjacent to
+a trigger, so no explosion can strand a pair. It falls out of cell-ownership.
+Also forbid stray trigger words: build that one book from a dictionary with the
+"boom" words removed, and plant the handful of real triggers explicitly, so the
+only bombs are the planned ones.
+
+**Path 1 (what we DID first — the cosmetic scaffold).** The whole 3×3 block is
+planted with ordinary *eliminable* words (center = an eliminable BOOM word; the
+eight neighbours = ordinary eliminable words). The reaction runs as a verify-time
+step after the absorber (so the trigger is already crossed) and the explosion is
+*consistent but inert* — the neighbours were going to be crossed by their own
+rules anyway, so the bomb just crosses them a beat early. This proved the whole
+pipeline (planner plants bombs, chain carries the reaction step, verifier runs
+the explosion, print shows the rule, the full 21-book build stays clean) with
+**zero change to the tiling/budget math**, hence zero risk to the other books.
+
+**Path 2 (this deferred upgrade — makes it LOAD-BEARING).** Fill the eight
+neighbour cells with **orphan words**: words that survive every normal rule, so
+the explosion is the *only* thing that eliminates them. Now the reaction cannot
+be skipped — skip it and those orphans wrongly survive, so there is no longer a
+unique answer without the bomb going off. That is the whole appeal: the mechanic
+genuinely does work no other rule does.
+
+**Why Path 2 is more than a config change — what it actually requires.**
+- A new *victim* plant kind. Today `ChainPlan` rejects a plant that survives
+  every spelling rule ("second survivor"). A victim plant is deliberately an
+  orphan whose death step is the reaction step, not a spelling rule — so the
+  plant/`StepResolver` death-map logic needs to allow and record that.
+- Budget accounting: the victim cells are owned (counted like plants, subtracted
+  from `available`), and the reaction becomes a real eliminator of exactly those
+  cells rather than a 0-cell no-op.
+- These touch `ChainPlan`/`PlantRule`/`StepResolver` — code **every** book
+  shares — so the risk is real. Containment: gate victims to the one book, and
+  re-run the full 21-book build to confirm 21/21 still verify before trusting it.
+
+**Decision rule for whether it's worth doing.** If making victims orphans ever
+forces breaking a core invariant (cell-ownership, one-survivor, "software does
+the intelligent work"), or balloons into a multi-week change, or introduces an
+order-dependent outcome we can't kill with cell-reservation — **drop it** and
+keep the Path 1 cosmetic version. The cosmetic version already gives the player
+the full experience; Path 2 only makes it mechanically essential.

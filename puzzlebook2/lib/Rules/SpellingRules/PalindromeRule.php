@@ -10,6 +10,9 @@ use Puzzlebook2\Rules\SpellingRuleBase;
 /** Cross out every word that reads the same forwards and backwards. */
 final class PalindromeRule extends SpellingRuleBase
 {
+    /** Auto-computed by bin/compute-incompatibilities.php -- do not hand-edit; rerun the tool. */
+    public const INCOMPATIBLE_WITH = ['AbbaPatternRule'];
+
     public function failsWord(string $word): bool
     {
         return WordTags::isPalindrome($word);

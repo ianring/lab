@@ -12,6 +12,8 @@ final class ContainsTchRule extends ContainsSubstringRule
 
 
 
+
+
     public function __construct()
     {
         parent::__construct('tch');

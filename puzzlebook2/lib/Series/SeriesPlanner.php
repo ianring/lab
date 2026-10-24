@@ -47,6 +47,7 @@ final class SeriesPlanner
         private BoardSpec $spec,
         private int $totalBooks,
         private int $seed = 777,
+        private ?int $reactionBook = null,
     ) {
     }
 
@@ -167,9 +168,17 @@ final class SeriesPlanner
             $occupied[1][$books[1]['answer_cell']] = true;
         }
 
+        // ---- BOOM bombs, one book only: trigger + its reserved 3x3 block ----
+        $bombs = [];
+        if ($this->reactionBook !== null && $this->reactionBook >= 1 && $this->reactionBook <= $this->totalBooks) {
+            $bombs = $this->placeBombs($this->reactionBook, $books, $occupied, $mysteries);
+        }
+
         return [
             'answers' => $this->answers,
             'mysteries' => $mysteries,
+            'reaction_book' => $this->reactionBook,
+            'bombs' => $bombs,
             'addressee' => $addressee,
             'acrostic_page' => $acrosticPage,
             'acrostic_start_col' => $startCol,
@@ -213,6 +222,114 @@ final class SeriesPlanner
     }
 
     /**
+     * Plant the BOOM bombs for one book: a trigger word (contains "boom", so the
+     * VowelRun absorber crosses it out) at an interior cell, and eight eliminable
+     * neighbour words filling its 3x3 block -- which reserves the block so no
+     * pair or answer can land inside a blast. Returns a description per bomb.
+     *
+     * @return array<int,array{center:int,trigger:string,victims:int[]}>
+     */
+    private function placeBombs(int $b, array &$books, array &$occupied, array $mysteries): array
+    {
+        $spec = $this->spec;
+        $wantBombs = 2;
+        $offsets = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+
+        $triggers = $this->pickBoomTriggers($wantBombs);
+        $wantBombs = min($wantBombs, count($triggers));
+
+        $used = array_fill_keys(array_map('strtolower', $this->answers), true);
+        foreach ($mysteries as $m) {
+            $used[strtolower((string) $m)] = true;
+        }
+        foreach ($triggers as $t) {
+            $used[strtolower($t)] = true;
+        }
+        $neighbours = $this->neighbourPool($used);
+        $np = 0;
+
+        $cells = Rng::shuffle($spec->allCells(), $this->seed + 9000 + $b);
+        $bombs = [];
+        foreach ($cells as $center) {
+            if (count($bombs) >= $wantBombs) {
+                break;
+            }
+            [$p, $r, $c] = $spec->coordsOf($center);
+            if ($r < 1 || $r > $spec->rows - 2 || $c < 1 || $c > $spec->cols - 2) {
+                continue; // need all eight neighbours on the same page
+            }
+            $block = [$center];
+            foreach ($offsets as [$dr, $dc]) {
+                $block[] = $spec->linearIndex($p, $r + $dr, $c + $dc);
+            }
+            $free = true;
+            foreach ($block as $cell) {
+                if (isset($occupied[$b][$cell])) {
+                    $free = false;
+                    break;
+                }
+            }
+            if (!$free || $np + 8 > count($neighbours)) {
+                continue;
+            }
+            $k = count($bombs);
+            $trigger = $triggers[$k];
+            $books[$b]['plants'][] = ['cell' => $center, 'word' => $trigger, 'id' => "boom-trigger-{$b}-{$k}", 'role' => 'boom_trigger'];
+            $occupied[$b][$center] = true;
+            $victims = [];
+            foreach ($offsets as $i => [$dr, $dc]) {
+                $cell = $spec->linearIndex($p, $r + $dr, $c + $dc);
+                $books[$b]['plants'][] = ['cell' => $cell, 'word' => $neighbours[$np++], 'id' => "boom-victim-{$b}-{$k}-{$i}", 'role' => 'boom_victim'];
+                $occupied[$b][$cell] = true;
+                $victims[] = $cell;
+            }
+            $bombs[] = ['center' => $center, 'trigger' => $trigger, 'victims' => $victims];
+        }
+        if ($bombs === []) {
+            throw new \RuntimeException("Reaction book {$b}: could not place any BOOM bomb (grid too crowded or no words).");
+        }
+        return $bombs;
+    }
+
+    /** Up to $k distinct dictionary words containing "boom" (all eliminable -- "oo" is a vowel run). @return string[] */
+    private function pickBoomTriggers(int $k): array
+    {
+        $found = [];
+        foreach ($this->dictionary->all() as $w) {
+            $len = strlen($w);
+            // 4..6 letters => the "oo" in "boom" is a vowel run the absorber
+            // crosses, so the trigger is reliably eliminated (and thus fires).
+            if (str_contains($w, 'boom') && $len >= 4 && $len <= 6) {
+                $found[] = $w;
+            }
+        }
+        $found = Rng::shuffle($found, $this->seed + 4242);
+        return array_slice($found, 0, $k);
+    }
+
+    /**
+     * Eliminable neighbour words for the blocks: an adjacent vowel pair (so the
+     * universal VowelRun absorber crosses them), 3..8 letters, not already used.
+     *
+     * @param array<string,bool> $used
+     * @return string[]
+     */
+    private function neighbourPool(array $used): array
+    {
+        $pool = [];
+        foreach ($this->dictionary->all() as $w) {
+            $len = strlen($w);
+            // Same eliminability guarantee as Mystery words: 4..6 letters with an
+            // adjacent a/i/o/u pair, so the VowelRun absorber always crosses them.
+            if ($len < 4 || $len > 6 || isset($used[$w]) || !preg_match('/[aiou]{2}/', $w)) {
+                continue;
+            }
+            $pool[] = $w;
+        }
+        return Rng::shuffle($pool, $this->seed + 1717);
+    }
+
+    /**
      * 21 distinct Mystery words, each eliminable in any book (adjacent vowel
      * pair + <=6 letters, so the universal VowelRunRule always crosses it out),
      * with a usable vowel count, 'e'-free to keep them plain, and not equal to
@@ -230,6 +347,9 @@ final class SeriesPlanner
             $len = strlen($w);
             if ($len < 4 || $len > 6 || $len > $rows || isset($answerSet[$w]) || strpos($w, 'e') !== false) {
                 continue;
+            }
+            if (str_contains($w, 'boom')) {
+                continue; // never let a Mystery word be a BOOM word -- it would be an unplanned trigger
             }
             if (!preg_match('/[aiou]{2}/', $w)) {
                 continue;

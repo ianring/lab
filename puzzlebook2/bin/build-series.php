@@ -134,7 +134,7 @@ if (count($answers) < $total) {
 }
 
 // ---- plan the whole series (Mystery chain) before solving anything --------
-$planner = new SeriesPlanner($answers, $dictionary, $spec, $total, 777);
+$planner = new SeriesPlanner($answers, $dictionary, $spec, $total, 777, ChainVariant::REACTION_BOOK);
 $plan = $planner->plan();
 
 printf(
@@ -163,7 +163,16 @@ file_put_contents($outRoot . '/plan.json', json_encode([
     'places' => $plan['places'],
     'box_number' => $plan['box_number'],
     'box_find' => $plan['box_find'],
+    'reaction_book' => $plan['reaction_book'] ?? null,
+    'bombs' => $plan['bombs'] ?? [],
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+
+// The reaction book (if any) builds from a BOOM-free dictionary so no stray
+// trigger word can appear incidentally; its real BOOM triggers are planted.
+$boomFree = new Dictionary(array_values(array_filter(
+    $dictionary->all(),
+    static fn (string $w): bool => !str_contains($w, 'boom'),
+)));
 
 $seriesStart = microtime(true);
 $results = [];
@@ -176,6 +185,7 @@ foreach ($series['books'] as $bookCfg) {
     $baseSeed = (int) $bookCfg['seed'];
     $answerCell = $plan['books'][$n]['answer_cell'];
     $plants = $plan['books'][$n]['plants'];
+    $bookDict = $n === ChainVariant::REACTION_BOOK ? $boomFree : $dictionary;
     $label = $n === $capstone ? "Book {$n} (Capstone)" : "Book {$n}";
 
     // This book's own chain: the Capstone gets the borrowed diagonal, every
@@ -184,7 +194,7 @@ foreach ($series['books'] as $bookCfg) {
     $composed = $n === $capstone
         ? ChainVariant::forCapstone($answers[$n])
         : ChainVariant::forBook($n, $answers[$n]);
-    $tuned = AutoTuner::tune($composed, $spec, $dictionary, $baseSeed);
+    $tuned = AutoTuner::tune($composed, $spec, $bookDict, $baseSeed);
     $thisChain = $tuned['chain'];
     // The middle tier sits after the spine, plus the flavor tier in normal
     // books (the Capstone has no flavor tier).
@@ -202,7 +212,7 @@ foreach ($series['books'] as $bookCfg) {
         fwrite(STDERR, "--- {$label}, seed {$seed}" . ($attempt > 0 ? " (retry {$attempt})" : '') . " ---\n");
 
         $board = new Board($spec);
-        $planObj = ChainPlan::load($thisChain, $board, $dictionary, $seed, $plants, $answerCell);
+        $planObj = ChainPlan::load($thisChain, $board, $bookDict, $seed, $plants, $answerCell);
         if ($planObj->problems() !== []) {
             $results[$n] = ['error' => 'plan: ' . $planObj->problems()[0]];
             fwrite(STDERR, "  SKIPPED -- plan has problems:\n");

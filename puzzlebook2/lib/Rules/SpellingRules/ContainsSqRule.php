@@ -12,6 +12,8 @@ final class ContainsSqRule extends ContainsSubstringRule
 
 
 
+
+
     public function __construct()
     {
         parent::__construct('sq');

@@ -57,6 +57,15 @@ namespace Puzzlebook2\Series;
  */
 final class ChainVariant
 {
+    /**
+     * The one book (1..20) that carries the BOOM trigger-reaction. Its chain
+     * gets an extra BoomReactionRule step after the final sweep, and the builder
+     * plants BOOM bombs + their 3x3 blocks there (see SeriesPlanner and
+     * bin/build-series.php). Null-like 0 would mean "no book". Only this book
+     * differs; the other twenty build exactly as before.
+     */
+    public const REACTION_BOOK = 7;
+
     /** @var array<int,array{type:string,kf:float}> positions 1-7, fixed */
     private const SPINE = [
         ['type' => 'PalindromeRule', 'kf' => 0.9957],
@@ -140,7 +149,7 @@ final class ChainVariant
         for ($q = 0; $q < $n; $q++) {
             $order[] = self::MIDDLE[($q + $bookNo) % $n];
         }
-        return self::assemble($order, $answer, true);
+        return self::assemble($order, $answer, true, $bookNo === self::REACTION_BOOK);
     }
 
     /**
@@ -157,11 +166,11 @@ final class ChainVariant
         for ($q = 0; $q < $n; $q++) {
             $order[] = self::MIDDLE[(2 * $q + 8) % $n];
         }
-        return self::assemble($order, $answer, false);
+        return self::assemble($order, $answer, false, false);
     }
 
     /** @param array<int,array{type:string,kf:float}> $middleOrder */
-    private static function assemble(array $middleOrder, string $answer, bool $withFlavor): array
+    private static function assemble(array $middleOrder, string $answer, bool $withFlavor, bool $withReaction = false): array
     {
         $steps = [];
         foreach (self::SPINE as $r) {
@@ -188,6 +197,16 @@ final class ChainVariant
             'final' => true,
             'rule' => ['type' => 'WordLength7Rule'],
         ];
+        if ($withReaction) {
+            // Runs last, after the trigger has already been crossed, so the
+            // explosion fires on the real board. Owns no cells (derived, 0 budget).
+            $steps[] = [
+                'kind' => 'eliminate',
+                'printed' => true,
+                'rule' => ['type' => 'BoomReactionRule'],
+                'construction' => ['derived' => true],
+            ];
+        }
 
         foreach ($steps as $i => &$step) {
             $step['id'] = $i + 1;

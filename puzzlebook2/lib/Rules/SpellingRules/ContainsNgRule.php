@@ -12,6 +12,8 @@ final class ContainsNgRule extends ContainsSubstringRule
 
 
 
+
+
     public function __construct()
     {
         parent::__construct('ng');

@@ -14,6 +14,8 @@ final class EndsWithIngRule extends SpellingRuleBase
 
 
 
+
+
     public function failsWord(string $word): bool
     {
         return strlen($word) > 3 && str_ends_with($word, 'ing');

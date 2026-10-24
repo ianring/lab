@@ -12,6 +12,8 @@ final class ContainsStrRule extends ContainsSubstringRule
 
 
 
+
+
     public function __construct()
     {
         parent::__construct('str');
