@@ -32,6 +32,6 @@ final class RepeatedBlockRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word made of the same group of two or more letters repeated (DADA, TOMTOM, PERIPERI).';
+        return 'Cross out every word made of the same group of two or more letters repeated (`DADA`, `TOMTOM`, `PERIPERI`).';
     }
 }

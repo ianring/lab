@@ -29,9 +29,6 @@ final class StraightLineLettersRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Think of each letter as its simplest printed CAPITAL. Some capitals are drawn with only '
-            . 'straight lines and no curve at all: A E F H I K L M N T V W X Y Z. Cross out every word of '
-            . 'THREE OR MORE letters built entirely from those straight-line capitals (ANVIL, KITTEN, WHITE). '
-            . 'If a word uses even one curved letter -- B C D G J O P Q R S U -- it is safe.';
+        return 'Think of each letter as its simplest printed capital. Some capitals are drawn with only straight lines and no curve at all: `A E F H I K L M N T V W X Y Z`. Cross out every word of three or more letters built entirely from those straight-line capitals (`ANVIL`, `KITTEN`, `WHITE`). A word with even one curved letter -- `B C D G J O P Q R S U` -- is kept.';
     }
 }

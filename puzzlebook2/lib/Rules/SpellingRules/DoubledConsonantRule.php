@@ -23,6 +23,6 @@ final class DoubledConsonantRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word with the same consonant letter twice in a row (HAPPY, LETTER, SUMMER, PUZZLE).';
+        return 'Cross out every word with the same consonant letter twice in a row (`HAPPY`, `LETTER`, `SUMMER`, `PUZZLE`).';
     }
 }

@@ -115,10 +115,6 @@ final class BoomReactionRule implements Rule
     /** The printed instruction -- the ONE authoritative copy, kept beside the logic so text and rule cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Watch for any word that has the letters BOOM in it. The instant such a word gets crossed out '
-            . 'by any rule, it goes off like a bomb: also cross out the eight words immediately around it on '
-            . 'the same page -- up, down, left, right, and the four diagonals. (A word near an edge simply has '
-            . 'fewer neighbours to take out.) Keep an eye out, because a blast can clear words no other rule '
-            . 'would ever reach.';
+        return 'Watch for any word that has the letters `BOOM` in it. The instant such a word gets crossed out by any rule, it goes off like a bomb: also cross out the eight words immediately around it on the same page -- up, down, left, right, and the four diagonals. (A word near an edge simply has fewer neighbours to take out.) Keep an eye out, because a blast can clear words no other rule would ever reach.';
     }
 }

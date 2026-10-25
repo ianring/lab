@@ -29,6 +29,6 @@ final class ThreeDistinctLettersRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word of SIX LETTERS OR MORE spelled using three or fewer DISTINCT letters, however often each one repeats (REFERRER re-uses R, E, F; BANANA re-uses B, A, N).';
+        return 'Cross out every word of six letters or more spelled using three or fewer distinct letters, however often each one repeats (`REFERRER` re-uses `R`, `E`, `F`; `BANANA` re-uses `B`, `A`, `N`).';
     }
 }

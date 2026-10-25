@@ -15,6 +15,6 @@ final class ContainsZRule extends ContainsSubstringRule
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word containing the letter Z.';
+        return 'Cross out every word containing the letter `Z`.';
     }
 }

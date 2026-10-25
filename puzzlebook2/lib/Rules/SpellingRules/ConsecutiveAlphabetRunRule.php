@@ -25,8 +25,6 @@ final class ConsecutiveAlphabetRunRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word that contains THREE letters which run in a row in the alphabet AND sit next '
-            . 'to each other in the word, in order -- ...DEF..., ...RST..., ...STU... (DEFT, FIRST, STUDY). '
-            . 'The three must climb by one each step with no gap.';
+        return 'Cross out every word that contains three consecutive letters which run in a row in the alphabet, in order, like `ABC`, `BCD`, `CDE`... (`<u>DEF</u>T`, `FI<u>RST</u>`, `<u>STU</u>DY`).';
     }
 }

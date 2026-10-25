@@ -36,8 +36,6 @@ final class AbbaPatternRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every FOUR-letter word built on the pattern ABBA -- its first and last letters are the '
-            . 'same as each other, and its two middle letters are the same as each other (NOON, PEEP, DEED). '
-            . 'Such a word reads the same forwards and backwards.';
+        return 'Cross out every four-letter word built on the pattern `ABBA` -- its first and last letters are the same as each other, and its two middle letters are the same as each other (`NOON`, `PEEP`, `DEED`). Such a word reads the same forwards and backwards.';
     }
 }

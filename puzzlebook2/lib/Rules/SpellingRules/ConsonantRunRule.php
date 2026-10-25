@@ -35,6 +35,6 @@ final class ConsonantRunRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Eliminate every word that does NOT contain the letter Y but has four consonants in a row. MONSTROUS goes: it has the run NSTR and no Y anywhere. YOUNGSTER stays: it has the run NGST, but it contains a Y.';
+        return 'Cross out every word that has four consonants in a row and does not contain the letter `Y`. `MONSTROUS` is eliminated -- it has the run `NSTR` and no `Y`. `YOUNGSTER` is kept -- it has the run `NGST` but also a `Y`.';
     }
 }

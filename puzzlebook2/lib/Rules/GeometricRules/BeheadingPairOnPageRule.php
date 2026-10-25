@@ -153,7 +153,6 @@ final class BeheadingPairOnPageRule implements Rule, \Puzzlebook2\Rules\Requires
     /** The printed instruction -- the ONE authoritative copy, kept beside the logic so text and rule cannot drift apart. */
     public function ruleText(): string
     {
-        return 'On every page, find a pair of words, both still standing, where one word is exactly the other '
-            . 'with its FIRST letter taken off (BREAD and READ, or CLOSE and LOSE). Cross out both words of the pair.';
+        return 'On every page, find a pair of words, both still standing, where one word is exactly the other with its first letter taken off (`BREAD` and `READ`, or `CLOSE` and `LOSE`). Cross out both words of the pair.';
     }
 }

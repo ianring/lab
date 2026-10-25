@@ -158,7 +158,6 @@ final class SemordnilapPairOnPageRule implements Rule, \Puzzlebook2\Rules\Requir
     /** The printed instruction -- the ONE authoritative copy, kept beside the logic so text and rule cannot drift apart. */
     public function ruleText(): string
     {
-        return 'On every page, look for a pair of words, both still standing, where one word spelled backwards '
-            . 'is exactly the other word (STRAW and WARTS, or DIAPER and REPAID). Cross out both words of the pair.';
+        return 'On every page, look for a pair of words, both still standing, where one word spelled backwards is exactly the other word (`STRAW` and `WARTS`, or `DIAPER` and `REPAID`). Cross out both words of the pair.';
     }
 }

@@ -31,7 +31,7 @@ abstract class WordLengthRule extends SpellingRuleBase
     /** The printed instruction; the chain's final step gets its closing line appended by BookWriter. */
     public function ruleText(): string
     {
-        $spelled = self::SPELLED[$this->length] ?? (string) $this->length;
+        $spelled = strtolower(self::SPELLED[$this->length] ?? (string) $this->length);
         return "Cross out every remaining word of exactly {$spelled} letters.";
     }
 }

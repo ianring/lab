@@ -26,6 +26,6 @@ final class AlphabeticalOrderRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word of FOUR OR MORE letters whose letters run in alphabetical order from first to last, never going backwards (ALMOST, BEGIN, CHIMP). A repeated letter does not count as going backwards, so BLESS and ALLOT go too. Words of three letters or fewer are safe.';
+        return 'Cross out every word of four or more letters whose letters run in alphabetical order from first to last, never going backwards (`ALMOST`, `BEGIN`, `CHIMP`). A repeated letter does not count as going backwards, so `BLESS` and `ALLOT` are eliminated too.';
     }
 }

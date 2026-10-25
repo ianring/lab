@@ -23,9 +23,6 @@ final class AnagramHalvesRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'This one is only for words of EXACTLY EIGHT letters. Split the word down the middle into two '
-            . 'four-letter halves. Cross it out if the first half and the second half use exactly the same '
-            . 'four letters as each other, just in a different order -- each half an anagram of the other '
-            . '(REAPPEAR splits into REAP and PEAR; TEAMMATE into TEAM and MATE). Every other word is safe.';
+        return 'This one is only for words of exactly eight letters. Split the word down the middle into two four-letter halves. Cross it out if the first half and the second half use exactly the same four letters as each other, just in a different order -- each half an anagram of the other (`REAPPEAR` splits into `REAP` and `PEAR`; `TEAMMATE` into `TEAM` and `MATE`).';
     }
 }

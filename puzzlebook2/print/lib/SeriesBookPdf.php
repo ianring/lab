@@ -178,24 +178,65 @@ final class SeriesBookPdf extends \FPDF
             . 'before starting the next.', 0, 'J');
         $this->Ln(2);
 
+        // Standing rules (the BOOM reaction) apply the whole way through, not at
+        // one position, so print them first -- before the numbered sequence.
+        foreach ($this->chain['steps'] as $step) {
+            if (empty($step['printed']) || ($step['rule']['type'] ?? '') !== 'BoomReactionRule') {
+                continue;
+            }
+            $this->SetFont($this->fontFamily, 'B', 10.5);
+            $this->Cell(0, 5.2, 'Keep this in mind the whole way through:', 0, 2);
+            $this->writeRich($step['rule_text'] ?? $step['rule']['type'], 4.7, 10);
+            $this->Ln(3.8);
+        }
+
         $number = 0;
         foreach ($this->chain['steps'] as $step) {
-            if (empty($step['printed'])) {
+            if (empty($step['printed']) || ($step['rule']['type'] ?? '') === 'BoomReactionRule') {
                 continue;
             }
             $number++;
             $text = $step['rule_text'] ?? $step['rule']['type'];
+            $grid = $step['boggle_grid'] ?? null;
 
             $bodyLines = $this->countWrappedLines($this->stripRichMarkup($text), $this->contentWidth(), 10);
-            $blockH = 5.2 + $bodyLines * 4.7 + 3.8;
+            $gridH = $grid !== null ? 5.0 + count($grid) * self::BOGGLE_CELL + 2.5 : 0.0;
+            $blockH = 5.2 + $gridH + $bodyLines * 4.7 + 3.8;
             if ($this->GetY() + $blockH > $this->trimH - 14) {
                 $this->AddPage();
             }
             $this->SetFont($this->fontFamily, 'B', 10.5);
             $this->Cell(0, 5.2, "Rule {$number}", 0, 2);
+            if ($grid !== null) {
+                $this->SetFont($this->fontFamily, '', 10);
+                $this->Cell(0, 5.0, 'Here is a letter board:', 0, 2);
+                $this->drawBoggleGrid($grid);
+            }
             $this->writeRich($text, 4.7, 10);
             $this->Ln(3.8);
         }
+    }
+
+    private const BOGGLE_CELL = 8.0;
+
+    /** Draws the Boggle board as real square cells with borders, letters centred. */
+    private function drawBoggleGrid(array $grid): void
+    {
+        $size = self::BOGGLE_CELL;
+        $startX = $this->margin;
+        $this->SetFont($this->gridFamily, '', 12);
+        foreach ($grid as $row) {
+            $y = $this->GetY();
+            $x = $startX;
+            foreach ($row as $cell) {
+                $disp = strlen((string) $cell) > 1 ? ucfirst((string) $cell) : strtoupper((string) $cell);
+                $this->SetXY($x, $y);
+                $this->Cell($size, $size, $disp, 1, 0, 'C');
+                $x += $size;
+            }
+            $this->SetXY($startX, $y + $size);
+        }
+        $this->Ln(2.5);
     }
 
     /**
@@ -294,7 +335,7 @@ final class SeriesBookPdf extends \FPDF
         $this->MultiCell(0, 4.9, 'When one word is left standing, write it here.', 0, 'C');
         $this->Ln(6);
         $this->drawWritingBox();
-        $this->Ln(6);
+        $this->Ln(2);
         // Real fingerprint of the real answer (one-way; does not reveal it).
         $this->hashNote('your answer', Fingerprint::grouped(Fingerprint::of($this->chain['answer'])));
     }
@@ -313,7 +354,7 @@ final class SeriesBookPdf extends \FPDF
             . 'instruction, in some book, that points to it, and the whole quest can be done with '
             . 'the books alone. If you are hunting for something no instruction has mentioned, you '
             . 'can stop: it is not there.',
-            'The next page is how you find this book\'s Mystery Word.',
+            'To complete the quest, you will need the Mystery Word.',
         ]);
     }
 
@@ -324,24 +365,88 @@ final class SeriesBookPdf extends \FPDF
         $this->Cell(0, 8, 'THE MYSTERY WORD', 0, 2, 'C');
         $this->Ln(3);
         $this->SetFont($this->fontFamily, '', 10);
-        foreach ($this->mysterySteps() as $line) {
-            if (str_starts_with($line, '#')) {
-                $this->Ln(1);
-                $this->SetFont($this->fontFamily, 'B', 10);
-                $this->MultiCell(0, 4.9, substr($line, 1), 0, 'L');
-                $this->SetFont($this->fontFamily, '', 10);
-            } else {
-                $this->MultiCell(0, 4.9, $line, 0, 'J');
-                $this->Ln(1.6);
+
+        if ($this->bookNo === 1) {
+            $this->MultiCell(0, 4.9, 'Book 1 is the root of the series: its Mystery Word comes from its own '
+                . 'answer. Turn each letter into a number (A=1, B=2, C=3, ...) and add them for the page; the '
+                . 'number of letters is the row; the number of vowels (A, E, I, O, U) is the column. Write '
+                . 'them here:', 0, 'L');
+            $this->Ln(3);
+            $this->drawCoordWorksheet(['The Answer to Book 1']);
+        } else {
+            $prev = $this->bookNo - 1;
+            if ($this->isCapstone) {
+                $this->MultiCell(0, 4.9, 'The Capstone\'s Mystery Word is found like every book\'s. Because it '
+                    . 'needs this book\'s answer AND Book ' . $prev . '\'s Mystery Word, holding it proves you '
+                    . 'finished all twenty-one books -- it is the word you mail to claim the prize.', 0, 'L');
+                $this->Ln(3);
             }
+            $this->MultiCell(0, 4.9, 'Find each of these in this book and write where it sits:', 0, 'L');
+            $this->Ln(2);
+            $this->drawCoordWorksheet([
+                'The Answer to Book ' . $this->bookNo,
+                'The Mystery Word from Book ' . $prev,
+            ]);
+            $this->Ln(2.5);
+            $this->SetFont($this->fontFamily, 'B', 10.5);
+            $this->Cell(0, 5, 'Add them together', 0, 1, 'C');
+            $this->SetFont($this->fontFamily, 'I', 8.5);
+            $this->MultiCell(0, 4, 'Add the two pages, the two rows, and the two columns. If a page total passes '
+                . '100, subtract 100; if a row passes 25, subtract 25; if a column passes 5, subtract 5.', 0, 'C');
+            $this->SetFont($this->fontFamily, '', 10);
+            $this->Ln(2.5);
+            $this->drawCoordWorksheet(['The result']);
         }
-        $this->Ln(5);
+
+        $this->Ln(3);
+        $this->MultiCell(0, 4.9, 'Find the word in this book at that page, row, and column, and write it here:', 0, 'C');
+        $this->Ln(3);
         $this->drawWritingBox();
-        $this->Ln(6);
+        $this->Ln(2);
         $fp = $this->mysteryWord !== null && $this->mysteryWord !== ''
             ? Fingerprint::grouped(Fingerprint::of($this->mysteryWord))
             : null;
         $this->hashNote('your Mystery Word', $fp);
+    }
+
+    /**
+     * A fill-in worksheet: a Page / Row / Column header, then one row of empty
+     * boxes per label for the player to write the coordinates in.
+     *
+     * @param string[] $rowLabels
+     */
+    private function drawCoordWorksheet(array $rowLabels): void
+    {
+        $labelW = 58.0;
+        $cellW = 16.0;
+        $cellH = 9.0;
+        $cols = ['Page', 'Row', 'Column'];
+        $totalW = $labelW + count($cols) * $cellW;
+        $startX = ($this->trimW - $totalW) / 2;
+
+        $this->SetFont($this->fontFamily, 'B', 9);
+        $y = $this->GetY();
+        $x = $startX + $labelW;
+        foreach ($cols as $c) {
+            $this->SetXY($x, $y);
+            $this->Cell($cellW, 5, $c, 0, 0, 'C');
+            $x += $cellW;
+        }
+        $this->SetY($y + 5.5);
+
+        $this->SetLineWidth(0.3);
+        foreach ($rowLabels as $label) {
+            $ry = $this->GetY();
+            $this->SetFont($this->fontFamily, '', 9);
+            $this->SetXY($startX, $ry);
+            $this->Cell($labelW - 2.5, $cellH, $label, 0, 0, 'R');
+            $x = $startX + $labelW;
+            foreach ($cols as $c) {
+                $this->Rect($x + 1.5, $ry + 0.8, $cellW - 3, $cellH - 1.6);
+                $x += $cellW;
+            }
+            $this->SetY($ry + $cellH + 1.5);
+        }
     }
 
     private function addressPage(): void
@@ -487,7 +592,7 @@ final class SeriesBookPdf extends \FPDF
                 '#2. The number of letters in your answer is the ROW. The number of vowels (A, E, '
                 . 'I, O, U) is the COLUMN.',
                 '#3. The word at that page, row, and column is your Mystery Word.',
-                'Write it below and check it at eliminoid.com. Every later book\'s Mystery grows out '
+                'Write it below. Every later book\'s Mystery grows out '
                 . 'of this one.',
             ];
         }
@@ -499,9 +604,9 @@ final class SeriesBookPdf extends \FPDF
             : 'From Book 2 on, every book finds its Mystery Word the same way. You need two things: '
               . 'your answer for THIS book, and the Mystery Word from Book ' . $prev . '.';
         $close = $this->isCapstone
-            ? 'Write it below and check it at eliminoid.com. It is also where your PO box number '
+            ? 'Write it below. It is also where your PO box number '
               . 'comes from -- see "Building the address".'
-            : 'Write it below and check it at eliminoid.com.';
+            : 'Write it below.';
         return [
             $intro,
             '#1. Find your answer in this book -- note its page, row, and column.',
@@ -516,8 +621,7 @@ final class SeriesBookPdf extends \FPDF
     private function hashNote(string $what, ?string $fingerprint): void
     {
         $this->SetFont($this->fontFamily, '', 9);
-        $this->MultiCell(0, 4.4, 'To be sure of ' . $what . ', type it at eliminoid.com -- it will '
-            . 'tell you whether it matches. It never reveals the word.', 0, 'C');
+        $this->MultiCell(0, 4.4, 'To check ' . $what . ', type it at eliminoid.com', 0, 'C');
         $this->Ln(1.5);
         $this->SetFont($this->gridFamily, $this->gridStyle, 8.5);
         $this->SetTextColor(120, 120, 120);

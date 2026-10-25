@@ -25,12 +25,12 @@ final class AlphabetAdjacentEndsRule extends SpellingRuleBase
     public function describe(): string
     {
         return 'words of ' . self::MIN_LENGTH . '-' . self::MAX_LENGTH
-            . ' letters whose first and last letters are alphabet neighbours (A__B)';
+            . ' letters whose first and last letters are alphabet neighbours (`A`__`B`)';
     }
 
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word of FIVE OR SIX LETTERS whose first letter and last letter are next-door neighbours in the alphabet, in that order (A then B, B then C, and so on).';
+        return 'Cross out every word of five or six letters whose first letter and last letter are next-door neighbours in the alphabet, in that order (`A` then `B`, `B` then `C`, and so on).';
     }
 }

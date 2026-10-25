@@ -23,8 +23,6 @@ final class StackedDoublesRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word that has at least TWO doubled letters -- two separate places where the same '
-            . 'letter appears twice in a row (BALLOON has LL and OO; COMMITTEE has MM, TT and EE). A word with '
-            . 'only one doubled letter, or none, is safe.';
+        return 'Cross out every word that has at least two doubled letters -- two separate places where the same letter appears twice in a row (`BALLOON` has `LL` and `OO`; `COMMITTEE` has `MM`, `TT` and `EE`). A word with only one doubled letter, or none, is kept.';
     }
 }

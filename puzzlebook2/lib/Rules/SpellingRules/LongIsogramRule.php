@@ -25,8 +25,6 @@ final class LongIsogramRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word of EIGHT OR MORE letters in which no letter is used more than once -- every '
-            . 'single letter different from all the others (DANGEROUS, LUMBERJACK, BACKGROUND). Shorter words are '
-            . 'safe, and so is any long word that repeats even one letter.';
+        return 'Cross out every word of eight or more letters in which no letter is used more than once -- every single letter different from all the others (`DANGEROUS`, `LUMBERJACK`, `BACKGROUND`).';
     }
 }

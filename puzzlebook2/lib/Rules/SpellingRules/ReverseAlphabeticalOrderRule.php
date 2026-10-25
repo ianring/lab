@@ -26,9 +26,6 @@ final class ReverseAlphabeticalOrderRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word of FOUR OR MORE letters whose letters run in REVERSE alphabetical order '
-            . 'from first to last, never going forwards -- each letter is the same as, or earlier in the '
-            . 'alphabet than, the one before it (ZOOM, TROD, SPONGED). A repeated letter does not count as '
-            . 'going forwards. Words of three letters or fewer are safe.';
+        return 'Cross out every word of four or more letters whose letters run in reverse alphabetical order from first to last, never going forwards -- each letter is the same as, or earlier in the alphabet than, the one before it (`ZOOM`, `TROD`, `SPONGED`). A repeated letter does not count as going forwards.';
     }
 }

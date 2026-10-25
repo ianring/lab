@@ -29,6 +29,6 @@ final class FourConsonantsOneVowelRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every FIVE-letter word made of four consonants and exactly one vowel (TRUST, CRISP, GHOST).';
+        return 'Cross out every five-letter word made of four consonants and exactly one vowel (`TRUST`, `CRISP`, `GHOST`).';
     }
 }

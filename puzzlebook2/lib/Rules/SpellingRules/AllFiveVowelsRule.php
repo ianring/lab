@@ -23,8 +23,6 @@ final class AllFiveVowelsRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word that contains ALL FIVE vowels -- it must have an A, an E, an I, an O and a U '
-            . 'somewhere in it (EDUCATION, EQUATION, DIALOGUE). The letter Y does not count. A word missing even '
-            . 'one of the five vowels is safe.';
+        return 'Cross out every word that contains all five vowels -- it must have an `A`, an `E`, an `I`, an `O` and a `U` somewhere in it (`EDUCATION`, `EQUATION`, `DIALOGUE`). The letter `Y` does not count.';
     }
 }

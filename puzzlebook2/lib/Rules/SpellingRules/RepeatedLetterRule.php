@@ -29,6 +29,6 @@ final class RepeatedLetterRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word in which the SAME consonant appears four or more times (ASSASSIN has four S).';
+        return 'Cross out every word in which the same consonant appears four or more times (`ASSASSIN` has four `S`).';
     }
 }

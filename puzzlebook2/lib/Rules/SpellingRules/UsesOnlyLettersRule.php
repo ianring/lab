@@ -25,6 +25,6 @@ final class UsesOnlyLettersRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word that looks the same when reflected upside down. (they are spelled using only these letters: B C D E H I K O X)';
+        return 'Cross out every word that looks the same when reflected upside down (they are spelled using only these letters: `B C D E H I K O X`).';
     }
 }

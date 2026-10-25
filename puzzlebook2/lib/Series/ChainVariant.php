@@ -34,8 +34,19 @@ final class ChainVariant
     public const REACTION_BOOK = 7;
 
     private const NS = 'Puzzlebook2\\Rules\\SpellingRules\\';
-    private const ABSORBER = 'VowelRunRule';
-    private const FINAL = 'WordLength7Rule';
+    /** Always present in every book -- it catches the planted Mystery / acrostic / bomb words, which are all adjacent-vowel pairs. */
+    private const FORCED = 'VowelRunRule';
+
+    /** One chosen per book as the absorber (the last keep_fraction step), so the penultimate rule varies. Only VERY high real supply ones, since the absorber must soak the leftover. */
+    private const ABSORBERS = ['VowelBothEndsRule', 'LongIsogramRule', 'DoubledConsonantRule', 'WordLength10Rule', 'VowelRunRule'];
+
+    /** [decoy, final sweep] pairs, one chosen per book, so the last rule AND the held-back decoys vary book to book. */
+    private const FINALS = [
+        ['DecoyLength6Rule', 'WordLength6Rule'],
+        ['DecoyLength7Rule', 'WordLength7Rule'],
+        ['DecoyLength8Rule', 'WordLength8Rule'],
+        ['DecoyLength9Rule', 'WordLength9Rule'],
+    ];
 
     /** Selectable rules: type => [family, dictionary supply]. (Absorber + final are reserved, not here.) */
     private const POOL = [
@@ -111,6 +122,7 @@ final class ChainVariant
         'ContainsTrRule' => ['substring', 5281],
         'ContainsChRule' => ['substring', 5541],
         'BothEndPairsInSetRule' => ['ends', 5882],
+        'VowelRunRule' => ['vcrun', 6579],
         'ContainsNgRule' => ['substring', 7181],
         'VowelBothEndsRule' => ['ends', 7786],
         'LongIsogramRule' => ['shape', 10600],
@@ -160,9 +172,7 @@ final class ChainVariant
         $chains = [];
         for ($n = 1; $n <= $total; $n++) {
             $count = $n === $capstoneBook ? 20 : 30;
-            $selected = self::fillSelection(Rng::shuffle($reuse, $n), $count, $assigned[$n]);
-            $ordered = self::interleave($selected, $n);
-            $chains[$n] = self::assemble($ordered, 'placeholder', $n === self::REACTION_BOOK);
+            $chains[$n] = self::compose($n, $count, $reuse, $assigned[$n], 'placeholder', $n === self::REACTION_BOOK);
         }
         return $chains;
     }
@@ -170,17 +180,34 @@ final class ChainVariant
     /** A single book, ignoring cross-book single-use (for inspection/tests). */
     public static function forBook(int $bookNo, string $answer): array
     {
-        $selected = self::fillSelection(Rng::shuffle(array_keys(self::POOL), $bookNo), 30);
-        $ordered = self::interleave($selected, $bookNo);
-        return self::assemble($ordered, $answer, $bookNo === self::REACTION_BOOK);
+        return self::compose($bookNo, 30, array_keys(self::POOL), [], $answer, $bookNo === self::REACTION_BOOK);
     }
 
     /** The Capstone, standalone: leaner (fewer, chunkier rules). */
     public static function forCapstone(string $answer): array
     {
-        $selected = self::fillSelection(Rng::shuffle(array_keys(self::POOL), 9001), 20);
-        $ordered = self::interleave($selected, 9001);
-        return self::assemble($ordered, $answer, false);
+        return self::compose(9001, 20, array_keys(self::POOL), [], $answer, false);
+    }
+
+    /**
+     * Build one book: choose its absorber and final sweep (so its tail differs
+     * from every other book's), force VowelRun in, fill the rest from $pool,
+     * interleave the body, and assemble. The absorber is pulled out of the body
+     * and placed last (as the absorber). $forcedOnce are this book's single-use
+     * showpieces.
+     *
+     * @param string[] $pool        rule types this book may draw from
+     * @param string[] $forcedOnce  single-use rules pre-assigned to this book
+     */
+    private static function compose(int $seed, int $count, array $pool, array $forcedOnce, string $answer, bool $withReaction): array
+    {
+        $absorber = self::ABSORBERS[$seed % count(self::ABSORBERS)];
+        $finalPair = self::FINALS[(intdiv($seed, 2) + 1) % count(self::FINALS)];   // de-correlate from the absorber
+        $forced = array_values(array_unique(array_merge([self::FORCED, $absorber], $forcedOnce)));
+        $selected = self::fillSelection(Rng::shuffle($pool, $seed), $count, $forced);
+        $body = array_values(array_filter($selected, static fn (string $t): bool => $t !== $absorber));
+        $ordered = self::interleave($body, $seed);
+        return self::assemble($ordered, $absorber, $finalPair, $answer, $withReaction);
     }
 
     /**
@@ -300,37 +327,65 @@ final class ChainVariant
         return $out;
     }
 
-    /** Supply-aware seed keep_fractions: scarce rules take little, workhorses carry the bulk. */
+    /**
+     * Seed keep_fractions by spreading the board across the body PROPORTIONAL to
+     * supply, capped so no single rule takes a giant chunk. The point is to leave
+     * the absorber only a small remainder: a rule that has to place ~4000 words is
+     * both slow to construct and liable to run out of real (post-overlap) supply.
+     * High-supply rules each carry up to MAX_PER_RULE; scarce rules take a little.
+     */
     private static function seedKeepFractions(array $types): array
     {
-        $absorberReserve = 1500;
-        $targetTotal = (int) (self::BOARD_REF * 0.98) - $absorberReserve;
+        $maxPer = 1300;               // ceiling for any one body rule (~10% of board)
+        $reserve = 500;               // small leftover for the absorber to soak
+        $target = (int) (self::BOARD_REF * 0.98) - $reserve;
+
+        // Per-rule caps and supply weights.
         $caps = [];
+        $weights = [];
         foreach ($types as $t) {
-            $caps[$t] = max(1, (int) floor(0.75 * self::POOL[$t][1]));
+            $caps[$t] = min((int) floor(0.7 * self::POOL[$t][1]), $maxPer);
+            $weights[$t] = self::POOL[$t][1];
         }
-        // Binary-search the uniform target u so sum(min(cap, u)) == targetTotal.
-        $lo = 1;
-        $hi = $targetTotal;
-        for ($i = 0; $i < 40; $i++) {
-            $u = intdiv($lo + $hi, 2);
-            $sum = 0;
-            foreach ($caps as $c) {
-                $sum += min($c, $u);
+
+        // Water-fill proportional to supply, respecting each rule's cap: high-supply
+        // rules fill to the cap, the remainder is shared out by supply.
+        $budgets = array_fill_keys($types, 0);
+        $active = $types;
+        $remaining = $target;
+        for ($iter = 0; $iter < 20 && $remaining > 0 && $active !== []; $iter++) {
+            $wsum = 0;
+            foreach ($active as $t) {
+                $wsum += $weights[$t];
             }
-            if ($sum < $targetTotal) {
-                $lo = $u + 1;
-            } else {
-                $hi = $u;
+            if ($wsum <= 0) {
+                break;
             }
+            $next = [];
+            $spent = 0;
+            foreach ($active as $t) {
+                $add = (int) round($remaining * $weights[$t] / $wsum);
+                $room = $caps[$t] - $budgets[$t];
+                if ($add >= $room) {
+                    $budgets[$t] = $caps[$t];
+                    $spent += $room;
+                } else {
+                    $budgets[$t] += $add;
+                    $spent += $add;
+                    $next[] = $t;
+                }
+            }
+            $remaining -= $spent;
+            if ($spent <= 0) {
+                break;
+            }
+            $active = $next;
         }
-        $u = $hi;
 
         $kf = [];
         $rem = self::BOARD_REF;
         foreach ($types as $t) {
-            $b = min($caps[$t], $u, $rem - 1);
-            $b = max(1, $b);
+            $b = min(max(1, $budgets[$t]), $rem - 1);
             $kf[$t] = round(1 - $b / $rem, 5);
             $rem -= $b;
         }
@@ -341,25 +396,26 @@ final class ChainVariant
      * @param string[] $orderedTypes
      * @return array{steps: array, answer: string}
      */
-    private static function assemble(array $orderedTypes, string $answer, bool $withReaction): array
+    private static function assemble(array $orderedTypes, string $absorber, array $finalPair, string $answer, bool $withReaction): array
     {
         $kf = self::seedKeepFractions($orderedTypes);
         $steps = [];
         foreach ($orderedTypes as $type) {
             $steps[] = self::eliminate($type, $kf[$type]);
         }
-        $steps[] = self::eliminate(self::ABSORBER, 0.04);   // absorber: ChainPlan overrides its budget
+        $steps[] = self::eliminate($absorber, 0.04);   // absorber: ChainPlan overrides its budget to the remainder
+        [$decoy, $final] = $finalPair;
         $steps[] = [
             'kind' => 'eliminate',
             'printed' => false,
-            'rule' => ['type' => 'DecoyLength7Rule'],
+            'rule' => ['type' => $decoy],
             'construction' => ['derived' => true],
         ];
         $steps[] = [
             'kind' => 'eliminate',
             'printed' => true,
             'final' => true,
-            'rule' => ['type' => self::FINAL],
+            'rule' => ['type' => $final],
         ];
         if ($withReaction) {
             $steps[] = [

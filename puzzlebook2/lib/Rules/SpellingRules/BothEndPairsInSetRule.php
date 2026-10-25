@@ -38,6 +38,6 @@ final class BothEndPairsInSetRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word whose first TWO letters and last TWO letters are ALL on the top row of a keyboard: Q W E R T Y U I O P. Any length qualifies.';
+        return 'Cross out every word whose first two letters and last two letters are all on the top row of a keyboard: `Q W E R T Y U I O P`. Any length qualifies.';
     }
 }

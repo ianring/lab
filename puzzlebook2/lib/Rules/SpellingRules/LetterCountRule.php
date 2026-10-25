@@ -22,6 +22,6 @@ final class LetterCountRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word containing three or more of the letter I, wherever they sit (INITIAL, IGNITION, INVITING).';
+        return 'Cross out every word containing three or more of the letter `I`, wherever they sit (`INITIAL`, `IGNITION`, `INVITING`).';
     }
 }

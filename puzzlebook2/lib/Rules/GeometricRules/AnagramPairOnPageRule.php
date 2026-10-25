@@ -170,6 +170,6 @@ final class AnagramPairOnPageRule implements Rule, \Puzzlebook2\Rules\RequiresAc
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'On every page, find every pair of words that are both still standing and are anagrams of each other (LISTEN and SILENT, or DUSTY and STUDY). Cross out both words of the pair.';
+        return 'On every page, find every pair of words that are both still standing and are anagrams of each other (`LISTEN` and `SILENT`, or `DUSTY` and `STUDY`). Cross out both words of the pair.';
     }
 }

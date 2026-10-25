@@ -149,7 +149,6 @@ final class PeelingPairOnPageRule implements Rule, \Puzzlebook2\Rules\RequiresAc
     /** The printed instruction -- the ONE authoritative copy, kept beside the logic so text and rule cannot drift apart. */
     public function ruleText(): string
     {
-        return 'On every page, find a pair of words, both still standing, where one word is exactly the other '
-            . 'with BOTH its first and last letters taken off (PLANET and LANE, or SHARES and HARE). Cross out both.';
+        return 'On every page, find a pair of words, both still standing, where one word is exactly the other with both its first and last letters taken off (`PLANET` and `LANE`, or `SHARES` and `HARE`). Cross out both.';
     }
 }

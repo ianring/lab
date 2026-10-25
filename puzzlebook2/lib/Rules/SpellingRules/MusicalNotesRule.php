@@ -26,8 +26,6 @@ final class MusicalNotesRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'The seven musical notes are named with the letters A, B, C, D, E, F and G. Cross out every word '
-            . 'of THREE OR MORE letters that can be spelled using only those seven note letters -- a word you '
-            . 'could in theory play (CABBAGE, FACADE, BADGE). A word that needs any other letter is safe.';
+        return 'The seven musical notes are named with the letters `A`, `B`, `C`, `D`, `E`, `F` and `G`. Cross out every word of three or more letters that can be spelled using only those seven note letters -- a word you could in theory play (`CABBAGE`, `FACADE`, `BADGE`).';
     }
 }

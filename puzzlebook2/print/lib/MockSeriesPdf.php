@@ -273,7 +273,7 @@ final class MockSeriesPdf extends \FPDF
             . 'instruction, in some book, that points to it, and the whole quest can be done with '
             . 'the books alone. If you are hunting for something no instruction has mentioned, you '
             . 'can stop: it is not there.',
-            'The next page is how you find this book\'s Mystery Word.',
+            'To complete the quest, you will need the Mystery Word.',
         ]);
     }
 
@@ -422,7 +422,7 @@ final class MockSeriesPdf extends \FPDF
                 '#1. Find your answer -- the one word still standing. Note the page it is on.',
                 '#2. Your Mystery Word is the word in the top-left corner of that page (row 1, '
                 . 'column 1).',
-                'Write it below and check it at eliminoid.com. Every later book\'s Mystery grows out '
+                'Write it below. Every later book\'s Mystery grows out '
                 . 'of this one.',
             ];
         }
@@ -440,7 +440,7 @@ final class MockSeriesPdf extends \FPDF
                 . 'and its column.',
                 '#3. Open Book ' . $prev . ' to that page, that row, that column. The word there is '
                 . 'the Capstone\'s Mystery Word.',
-                'Write it below and check it at eliminoid.com. It is also where your PO box number '
+                'Write it below. It is also where your PO box number '
                 . 'comes from -- see "Building the address".',
             ];
         }
@@ -454,7 +454,7 @@ final class MockSeriesPdf extends \FPDF
             . 'its column.',
             '#3. Open Book ' . $prev . ' to that page, that row, that column. The word there is '
             . 'this book\'s Mystery Word.',
-            'Write it below and check it at eliminoid.com.',
+            'Write it below.',
         ];
     }
 

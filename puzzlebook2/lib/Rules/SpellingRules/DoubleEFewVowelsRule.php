@@ -41,6 +41,6 @@ final class DoubleEFewVowelsRule extends SpellingRuleBase
     /** The printed instruction -- the ONE authoritative copy, kept beside failsWord() so text and logic cannot drift apart. */
     public function ruleText(): string
     {
-        return 'Cross out every word containing a double E that has zero or one OTHER vowel besides the pair itself (KNEE has no other vowels; COFFEE has one, the O; FOURTEEN is safe -- it also has O and U, which is too many).';
+        return 'Cross out every word containing a double `E` that has at most one other vowel (`KNEE` and `COFFEE` match, but not `FOURTEEN` because it has too many other vowels).';
     }
 }

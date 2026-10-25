@@ -56,13 +56,12 @@ abstract class BoggleRule extends SpellingRuleBase
     }
 
     /**
-     * The printed instruction, with the board drawn out row by row. The "Qu"
-     * note is included only when the board actually has a multi-letter tile; a
-     * subclass may override this wholesale for fully bespoke copy.
+     * The tracing instruction only -- NO board. The renderer draws the board as
+     * a real grid (see SeriesBookPdf) and prints this beneath it. The "Qu" note
+     * appears only when the board has a multi-letter tile.
      */
-    public function ruleText(): string
+    public function instruction(): string
     {
-        $rows = [];
         $hasMultiTile = false;
         foreach ($this->board() as $row) {
             foreach ($row as $cell) {
@@ -70,16 +69,28 @@ abstract class BoggleRule extends SpellingRuleBase
                     $hasMultiTile = true;
                 }
             }
-            $rows[] = implode(' ', array_map(static fn (string $c): string => ucfirst($c), $row));
         }
-        $text = "Here is a letter board:\n" . implode("\n", $rows) . "\n\n"
-            . 'Cross out every word of ' . self::MIN_LENGTH . ' or more letters that you can trace on it: '
+        $text = 'Cross out every word of ' . self::MIN_LENGTH . ' or more letters that you can trace on it: '
             . 'start on any square, move to a touching square (sideways, up, down, or diagonally), and keep '
             . 'going, spelling the word one square at a time. You may not use the same square twice in one word.';
         if ($hasMultiTile) {
-            $text .= ' The "Qu" square counts as the two letters Q and U together.';
+            $text .= ' The `Qu` square counts as the two letters `Q` and `U` together.';
         }
         return $text;
+    }
+
+    /**
+     * Fallback printed instruction, with the board drawn out row by row as text
+     * (used anywhere that can't draw a real grid). The renderer prefers a real
+     * grid plus instruction(); a subclass may override this for bespoke copy.
+     */
+    public function ruleText(): string
+    {
+        $rows = [];
+        foreach ($this->board() as $row) {
+            $rows[] = '`' . implode(' ', array_map(static fn (string $c): string => ucfirst($c), $row)) . '`';
+        }
+        return "Here is a letter board:\n" . implode("\n", $rows) . "\n\n" . $this->instruction();
     }
 
     /** @return array<string,bool> */

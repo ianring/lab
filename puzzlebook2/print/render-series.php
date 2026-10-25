@@ -18,8 +18,10 @@ declare(strict_types=1);
  * first to vendor FPDF.
  */
 
+require __DIR__ . '/../lib/bootstrap.php';
 require __DIR__ . '/lib/SeriesBookPdf.php';
 
+use Puzzlebook2\Chain\Engine;
 use Puzzlebook2Print\SeriesBookPdf;
 
 $root = dirname(__DIR__);
@@ -74,6 +76,27 @@ foreach ($series['books'] as $bookCfg) {
         $missing[] = $n;
         continue;
     }
+
+    // Refresh each rule's printed instruction from its class, so a ruleText()
+    // WORDING edit shows on a plain re-render -- no rebuild needed (the grid is
+    // unchanged; only a rule's logic/board change would require rebuilding).
+    foreach ($chain['steps'] as &$step) {
+        if (empty($step['printed']) || !isset($step['rule']['type'])) {
+            continue;
+        }
+        try {
+            $rule = Engine::ruleFromConfig($step['rule']);
+            if ($rule instanceof \Puzzlebook2\Rules\SpellingRules\BoggleRule) {
+                $step['boggle_grid'] = $rule->grid();      // draw a real grid
+                $step['rule_text'] = $rule->instruction();  // instruction only
+            } else {
+                $step['rule_text'] = $rule->ruleText();
+            }
+        } catch (\Throwable $e) {
+            // keep whatever text was baked at build time
+        }
+    }
+    unset($step);
 
     $mysteryWord = $mysteries[$n] ?? $mysteries[(string) $n] ?? null;
     $pdf = new SeriesBookPdf($n, $total, $book, $chain, $print, $mysteryWord, $address);
