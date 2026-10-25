@@ -231,16 +231,29 @@ foreach ($series['books'] as $bookCfg) {
             $lastBeat = $now;
         });
 
+        // A solve allocates millions of short-lived cyclic objects (Decisions,
+        // Reservations, Domains, Trail entries). With the cyclic collector on,
+        // each book's solve pays O(reachable heap) per GC run, and the reachable
+        // heap grows across books (the 21 chains, the plan's plants, prior
+        // results all stay live) -- so late full-size books spent 15+ MINUTES
+        // almost entirely in GC (book 17: 944s vs 18s built alone, identical
+        // input). The garbage is cheap to just hold: peak RSS stays ~160MB with
+        // the collector off for one solve. So turn it off around the solve and
+        // reclaim deterministically between books.
+        gc_disable();
         $result = $solver->solve($board, $queue);
+        gc_enable();
         if ($result->outcome !== SolveOutcome::Success) {
             fwrite(STDERR, "  solve {$result->outcome->name} -- retrying with a fresh seed\n");
             unset($board, $planObj, $queue, $solver, $result);
+            gc_collect_cycles();
             continue;
         }
         $verification = ChainRunner::run($result->board, $planObj);
         if (!$verification['ok']) {
             fwrite(STDERR, "  verification failed -- retrying with a fresh seed\n");
             unset($board, $planObj, $queue, $solver, $result);
+            gc_collect_cycles();
             continue;
         }
 
