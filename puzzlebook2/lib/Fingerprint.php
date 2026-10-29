@@ -8,17 +8,21 @@ namespace Puzzlebook2;
  * The word fingerprint -- the single shared implementation used by BOTH the
  * public website hasher (web/index.php) and the book print pipeline.
  *
- *   fingerprint = encode( md5( normalise(word) . SALT ), ALPHABET )
+ *   fingerprint = reverse( encode( md5( normalise(word) . SALT ) ) )[0..19]
+ *   printed as   XXXXX-XXXXX-XXXXX-XXXXX   (grouped)
  *
  * Both sides MUST produce byte-identical strings, or a player's check on
  * eliminoid.com will not match the fingerprint printed in the book. That is
- * the whole reason this lives in one place: the salt, the normalisation, and
- * the alphabet are defined here and nowhere else. Never inline a copy.
+ * the whole reason this lives in one place: the salt, the normalisation, the
+ * alphabet, the reverse, and the length are defined here and nowhere else.
+ * Never inline a copy.
  *
  * The digest is shown in Crockford Base32 (alphabet 0-9 then A-Z minus the
- * ambiguous I, L, O, U): 32 symbols instead of hex's 16, so the code is
- * shorter (26 chars for a 128-bit md5), all-caps to match the grid, and safe
- * to read off a printed page without confusing 0/O or 1/I/L.
+ * ambiguous I, L, O, U): 32 symbols instead of hex's 16, all-caps to match the
+ * grid, and safe to read off a printed page without confusing 0/O or 1/I/L.
+ * The full digest is ~26 symbols; it is reversed and cut to 20 (four groups of
+ * five), so the excess is discarded -- still ample for a "did I get it right?"
+ * check (100 bits).
  *
  * Note: the salt is PUBLIC, so this is a convenience "did I get it right?"
  * checker, not an anti-cheat gate -- anyone can compute the same fingerprint
@@ -56,10 +60,21 @@ final class Fingerprint
         return preg_replace('/[^A-Z]/', '', strtoupper($raw)) ?? '';
     }
 
-    /** The canonical fingerprint of a word (normalises it first). */
+    /** Length of the printed code: four groups of five symbols. */
+    public const CODE_LENGTH = 20;
+
+    /**
+     * The canonical fingerprint of a word (normalises it first): the Base32
+     * digest REVERSED, then cut to CODE_LENGTH symbols (the excess is discarded).
+     * grouped() then prints it as XXXXX-XXXXX-XXXXX-XXXXX.
+     */
     public static function of(string $word): string
     {
-        return self::encode(md5(self::normalise($word) . self::salt(), true));
+        $full = self::encode(md5(self::normalise($word) . self::salt(), true));
+        // Pad to a fixed width first, so the reverse is stable even in the rare
+        // case encode() drops a leading symbol; then reverse and keep the front.
+        $full = str_pad($full, 26, self::ALPHABET[0], STR_PAD_LEFT);
+        return substr(strrev($full), 0, self::CODE_LENGTH);
     }
 
     /** Big-endian byte string -> a positional base over $alphabet (base58-style). */
@@ -85,9 +100,9 @@ final class Fingerprint
         return $out === '' ? $alphabet[0] : $out;
     }
 
-    /** Group a fingerprint into blocks for easier eyeball comparison. */
-    public static function grouped(string $code, int $size = 4): string
+    /** Group a fingerprint into dash-separated blocks (XXXXX-XXXXX-...) for easier eyeball comparison. */
+    public static function grouped(string $code, int $size = 5, string $sep = '-'): string
     {
-        return trim(chunk_split($code, $size, ' '));
+        return trim(chunk_split($code, $size, $sep), $sep);
     }
 }
