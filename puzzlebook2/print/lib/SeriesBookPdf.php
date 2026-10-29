@@ -42,7 +42,9 @@ final class SeriesBookPdf extends \FPDF
      *
      * @var array<int,string>
      */
-    private const EASTER_EGG_MESSAGES = [];
+    private const EASTER_EGG_MESSAGES = [
+        1 => 'THE ELIMINOID IS A REAL OBJECT YOU CAN WIN',
+    ];
     private const EASTER_EGG_PROTOTYPE = 'LOREM IPSUM DOLOR SINC';
 
     private float $trimW;
@@ -471,9 +473,10 @@ final class SeriesBookPdf extends \FPDF
     }
 
     /**
-     * The bonus page: a row of boxes, one per letter of the hidden message,
-     * each labelled with a page:row:column:letter coordinate the reader looks
-     * up and writes the letter into. Read in order, the boxes spell the message.
+     * The bonus page: a box per letter of the hidden message, each with a
+     * page:row:column coordinate printed beneath it. The reader finds that word
+     * in the grid and writes its FIRST letter in the box; read in order, the
+     * boxes spell the message.
      */
     private function easterEggPage(): void
     {
@@ -486,28 +489,27 @@ final class SeriesBookPdf extends \FPDF
 
         $this->SetFont($this->fontFamily, '', 10);
         $this->MultiCell(0, 4.9, 'Just for fun, and no puzzling needed. A short message is hidden in this '
-            . 'book, one letter at a time. Each box below points to a single letter somewhere in the grid.', 0, 'L');
+            . 'book, one letter at a time. Each box below points to a word somewhere in the grid.', 0, 'L');
         $this->Ln(2);
-        $this->writeRich('A box reads `page:row:column:letter`. For example `15:21:3:6` means: turn to '
-            . 'PAGE 15, count down to row 21 and across to column 3, and take the 6th letter of the word '
-            . 'you find there.', 4.9, 10);
+        $this->writeRich('The coordinate under a box reads `page:row:column`. For example `15:21:3` is the '
+            . 'word at row 21, column 3 on page 15 -- take its first letter.', 4.9, 10);
         $this->Ln(1);
         $this->SetFont($this->fontFamily, '', 10);
-        $this->MultiCell(0, 4.9, 'Write each letter in its box. Read the boxes in order, left to right, '
-            . 'to reveal the message.', 0, 'L');
+        $this->MultiCell(0, 4.9, 'Write each first letter in its box. Read the boxes in order, left to '
+            . 'right, to reveal the message.', 0, 'L');
         $this->Ln(5);
 
         $this->drawEggBoxes($lookups);
     }
 
     /**
-     * For each letter of $message, a real place in this book's grid that holds
-     * it: [char, page, row, col, pos], all 1-based, pos = which letter of the
-     * word. A space becomes a word break (char === ' '). Deterministic per book
-     * and scattered across the grid, so a book always yields the same lookup and
-     * the letters are not all clustered on one page.
+     * For each letter of $message, a real cell in this book's grid whose word
+     * STARTS with it: [char, page, row, col], all 1-based. A space becomes a
+     * word break (char === ' '). Deterministic per book and scattered across the
+     * grid, so a book always yields the same lookup and the letters are not all
+     * clustered on one page.
      *
-     * @return list<array{char:string,page:int,row:int,col:int,pos:int}>
+     * @return list<array{char:string,page:int,row:int,col:int}>
      */
     private function easterEggLookups(string $message): array
     {
@@ -516,15 +518,12 @@ final class SeriesBookPdf extends \FPDF
         $perPage = $rows * $cols;
         $words = $this->book['words'];
 
-        // Index every (cell, position) by the uppercase letter it holds.
-        $byLetter = [];
+        // Index each cell by the first letter of its word.
+        $byFirst = [];
         foreach ($words as $idx => $w) {
-            $u = strtoupper((string) $w);
-            for ($p = 0, $len = strlen($u); $p < $len; $p++) {
-                $ch = $u[$p];
-                if ($ch >= 'A' && $ch <= 'Z') {
-                    $byLetter[$ch][] = [$idx, $p + 1];
-                }
+            $ch = strtoupper((string) $w)[0] ?? '';
+            if ($ch >= 'A' && $ch <= 'Z') {
+                $byFirst[$ch][] = $idx;
             }
         }
 
@@ -532,25 +531,23 @@ final class SeriesBookPdf extends \FPDF
         $letterNo = 0;
         foreach (str_split(strtoupper($message)) as $ch) {
             if ($ch < 'A' || $ch > 'Z') {
-                $out[] = ['char' => ' ', 'page' => 0, 'row' => 0, 'col' => 0, 'pos' => 0];
+                $out[] = ['char' => ' ', 'page' => 0, 'row' => 0, 'col' => 0];
                 continue;
             }
-            $cands = $byLetter[$ch] ?? [];
+            $cands = $byFirst[$ch] ?? [];
             if ($cands === []) {
                 // Letter absent from the grid (vanishingly unlikely) -- blank box.
-                $out[] = ['char' => $ch, 'page' => 0, 'row' => 0, 'col' => 0, 'pos' => 0];
+                $out[] = ['char' => $ch, 'page' => 0, 'row' => 0, 'col' => 0];
                 $letterNo++;
                 continue;
             }
-            $pick = $this->eggScatter($this->bookNo, $letterNo, count($cands));
-            [$idx, $pos] = $cands[$pick];
+            $idx = $cands[$this->eggScatter($this->bookNo, $letterNo, count($cands))];
             $rem = $idx % $perPage;
             $out[] = [
                 'char' => $ch,
                 'page' => intdiv($idx, $perPage) + 1,
                 'row' => intdiv($rem, $cols) + 1,
                 'col' => $rem % $cols + 1,
-                'pos' => $pos,
             ];
             $letterNo++;
         }
@@ -566,22 +563,26 @@ final class SeriesBookPdf extends \FPDF
     /**
      * Lay out the lookup boxes, keeping each word's boxes together and wrapping
      * whole words to the next row (a word too wide for a row wraps mid-word).
+     * Each box is a small square to write the letter in, with its coordinate
+     * printed in a caption beneath it.
      *
-     * @param list<array{char:string,page:int,row:int,col:int,pos:int}> $lookups
+     * @param list<array{char:string,page:int,row:int,col:int}> $lookups
      */
     private function drawEggBoxes(array $lookups): void
     {
-        $boxW = 18.0;
-        $boxH = 18.0;
-        $gap = 1.6;        // between boxes within a word
-        $wordGap = 6.0;    // between words on the same row
-        $rowGap = 4.5;     // between rows of boxes
+        $boxW = 11.0;
+        $boxH = 11.0;
+        $capH = 4.0;       // caption (coordinate) strip beneath each box
+        $gap = 1.3;        // between boxes within a word
+        $wordGap = 5.0;    // between words on the same row
+        $rowGap = 5.0;     // between rows of boxes
 
         $left = $this->margin;
         $maxX = $this->trimW - $this->margin;
         $bottom = $this->trimH - $this->margin;
         $x = $left;
         $y = $this->GetY();
+        $step = $boxH + $capH + $rowGap;
 
         // Group into words (drop the space markers).
         $wordsOfBoxes = [];
@@ -604,14 +605,14 @@ final class SeriesBookPdf extends \FPDF
             $wordWidth = count($word) * $boxW + (count($word) - 1) * $gap;
             if ($x > $left && $x + $wordWidth > $maxX) {   // whole word won't fit -- new row
                 $x = $left;
-                $y += $boxH + $rowGap;
+                $y += $step;
             }
             foreach ($word as $lk) {
                 if ($x > $left && $x + $boxW > $maxX) {    // word wider than a row -- wrap mid-word
                     $x = $left;
-                    $y += $boxH + $rowGap;
+                    $y += $step;
                 }
-                if ($y + $boxH > $bottom) {                 // guard long future messages
+                if ($y + $boxH + $capH > $bottom) {         // guard long future messages
                     $this->AddPage();
                     $y = $this->margin;
                     $x = $left;
@@ -621,30 +622,27 @@ final class SeriesBookPdf extends \FPDF
             }
             $x += $wordGap - $gap;   // swap the trailing intra-word gap for a word gap
         }
-        $this->SetY($y + $boxH + $rowGap);
+        $this->SetY($y + $step);
     }
 
-    /** One lookup box: a coordinate strip in the grid typeface over a blank area for the letter. */
+    /** One lookup box: a blank square for the letter, its page:row:column caption beneath. */
     private function drawEggBox(float $x, float $y, float $w, float $h, array $lk): void
     {
         $this->SetLineWidth(0.3);
         $this->Rect($x, $y, $w, $h);
 
-        $coord = $lk['page'] === 0
-            ? ''
-            : sprintf('%d:%d:%d:%d', $lk['page'], $lk['row'], $lk['col'], $lk['pos']);
-
-        $pt = 6.0;
+        if ($lk['page'] === 0) {
+            return;   // letter absent from the grid (vanishingly unlikely) -- no caption
+        }
+        $coord = sprintf('%d:%d:%d', $lk['page'], $lk['row'], $lk['col']);
+        $pt = 6.5;
         $this->SetFont($this->gridFamily, '', $pt);
-        while ($pt > 4.0 && $this->GetStringWidth($coord) > $w - 1.5) {
+        while ($pt > 4.5 && $this->GetStringWidth($coord) > $w) {
             $pt -= 0.5;
             $this->SetFont($this->gridFamily, '', $pt);
         }
-        $this->SetXY($x, $y + 1.0);
-        $this->Cell($w, 3.4, $coord, 0, 0, 'C');
-
-        $this->SetLineWidth(0.15);
-        $this->Line($x + 1.2, $y + 5.0, $x + $w - 1.2, $y + 5.0);
+        $this->SetXY($x, $y + $h + 0.3);
+        $this->Cell($w, 3.2, $coord, 0, 0, 'C');
     }
 
     private function addressPage(): void
