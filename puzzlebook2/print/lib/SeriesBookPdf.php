@@ -33,12 +33,12 @@ final class SeriesBookPdf extends \FPDF
     private const COL_SLACK = 0.96;
 
     /**
-     * Easter-egg lookup puzzle: a short message spelled out by letters pulled
-     * from the grid via page:row:column:letter coordinates. Each book gets its
-     * own message. Ian supplies the real per-book text here (key = book number);
-     * until then every book uses the prototype placeholder below. The puzzle is
-     * read-only -- it points at letters already on the grid, so it never affects
-     * play or the build.
+     * Easter-egg lookup puzzle: a short per-book message spelled out by the first
+     * letters of words the reader finds via page:row:column coordinates. The real
+     * messages live in clues.txt (one per line, line N = book N); this built-in
+     * is only a fallback for books that line does not cover, and the prototype
+     * below is the last resort. The puzzle is read-only -- it points at words
+     * already on the grid, so it never affects play or the build.
      *
      * @var array<int,string>
      */
@@ -467,9 +467,46 @@ final class SeriesBookPdf extends \FPDF
 
     // ------------------------------------------------- easter-egg lookup puzzle
 
+    /** @var array<int,string>|null cached clues.txt (line N -> book N), loaded once per process */
+    private static ?array $cluesCache = null;
+
+    /**
+     * Message source, in order of precedence: a non-blank line N of clues.txt
+     * (the author's working file, line N = book N), then the EASTER_EGG_MESSAGES
+     * built-in, then the prototype placeholder. So the book series is driven by
+     * clues.txt once it is filled, with no code change.
+     */
     private function easterEggMessage(): string
     {
-        return self::EASTER_EGG_MESSAGES[$this->bookNo] ?? self::EASTER_EGG_PROTOTYPE;
+        return $this->cluesFromFile()[$this->bookNo]
+            ?? self::EASTER_EGG_MESSAGES[$this->bookNo]
+            ?? self::EASTER_EGG_PROTOTYPE;
+    }
+
+    /**
+     * clues.txt at the project root, one message per line: line 1 is Book 1's
+     * message, line 2 Book 2's, and so on -- strictly positional, so a blank
+     * line leaves that book on its fallback message rather than being skipped.
+     * Missing file or unreadable: no overrides.
+     *
+     * @return array<int,string> book number => message
+     */
+    private function cluesFromFile(): array
+    {
+        if (self::$cluesCache !== null) {
+            return self::$cluesCache;
+        }
+        self::$cluesCache = [];
+        $path = dirname(__DIR__, 2) . '/clues.txt';
+        if (is_file($path)) {
+            foreach (file($path, FILE_IGNORE_NEW_LINES) ?: [] as $i => $line) {
+                $line = trim($line);
+                if ($line !== '') {
+                    self::$cluesCache[$i + 1] = $line;
+                }
+            }
+        }
+        return self::$cluesCache;
     }
 
     /**
