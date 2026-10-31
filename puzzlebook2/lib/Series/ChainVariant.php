@@ -59,6 +59,7 @@ final class ChainVariant
         'ContainsOughRule' => ['substring', 179],
         'ThreeDistinctLettersRule' => ['shape', 208],
         'RepeatedLetterRule' => ['doubles', 225],
+        'RstlneRule' => ['letterset', 254, 'once'],
         'UsesOnlyLettersRule' => ['letterset', 258],
         'ContainsSchRule' => ['substring', 266],
         'AlternatingVowelRule' => ['vcrun', 277],
