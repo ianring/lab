@@ -17,12 +17,24 @@ use Puzzlebook2\Rules\SpellingRuleBase;
  * the dictionary it matches -- its intrinsic "supply", independent of any book.
  * (Different from bin/elim-report.php, which is per-book actual eliminations.)
  *
- *   php bin/cardinality-report.php          # sorted high to low
- *   php bin/cardinality-report.php --asc     # sorted low to high
+ *   php bin/cardinality-report.php              # sorted high to low
+ *   php bin/cardinality-report.php --asc         # sorted low to high
+ *   php bin/cardinality-report.php --csv          # also write build/rule-cardinality.csv
+ *   php bin/cardinality-report.php --csv=out.csv  # write the CSV to a chosen path
  */
 
 $root = dirname(__DIR__);
-$asc = in_array('--asc', array_slice($argv, 1), true);
+$args = array_slice($argv, 1);
+$asc = in_array('--asc', $args, true);
+// --csv or --csv=path: also write the counts to a CSV file (one row per rule).
+$csvPath = null;
+foreach ($args as $a) {
+    if ($a === '--csv') {
+        $csvPath = $root . '/build/rule-cardinality.csv';
+    } elseif (preg_match('/^--csv=(.+)$/', $a, $m)) {
+        $csvPath = $m[1];
+    }
+}
 $dict = Dictionary::loadFromFile($root . '/data/wordlist.txt');
 $words = $dict->all();
 $total = count($words);
@@ -61,4 +73,23 @@ printf("Rule cardinality against %d dictionary words (%d rules):\n\n", $total, c
 printf("%8s  %7s  %s\n", 'matches', '%', 'rule');
 foreach ($rows as $name => $n) {
     printf("%8d  %6.3f%%  %s\n", $n, $n / $total * 100, $name);
+}
+
+if ($csvPath !== null) {
+    $dir = dirname($csvPath);
+    if (!is_dir($dir) && !mkdir($dir, 0777, true) && !is_dir($dir)) {
+        fwrite(STDERR, "\ncould not create {$dir} for the CSV.\n");
+        exit(2);
+    }
+    $fh = fopen($csvPath, 'w');
+    if ($fh === false) {
+        fwrite(STDERR, "\ncould not open {$csvPath} for writing.\n");
+        exit(2);
+    }
+    fputcsv($fh, ['rule', 'matches', 'percent', 'dictionary_words'], ',', '"', '');
+    foreach ($rows as $name => $n) {
+        fputcsv($fh, [$name, $n, number_format($n / $total * 100, 3, '.', ''), $total], ',', '"', '');
+    }
+    fclose($fh);
+    printf("\nWrote %d rows to %s\n", count($rows), $csvPath);
 }
