@@ -26,6 +26,7 @@ require __DIR__ . '/../lib/bootstrap.php';
 
 use Puzzlebook2\Board\BoardSpec;
 use Puzzlebook2\Chain\Engine;
+use Puzzlebook2\Chain\KeepMask;
 use Puzzlebook2\Solver\FilledBoard;
 
 header('Content-Type: application/json; charset=utf-8');
@@ -138,11 +139,27 @@ foreach ($steps as $s) {
 
 $before = Engine::countSurvivors($keepBefore);
 $stepRule = Engine::ruleFromConfig($step['rule']);
+$blastCells = [];
+$triggered = [];
 if ($stepRule instanceof \Puzzlebook2\Rules\Reactive) {
     $keepAfter = $keepBefore; // standing rule: nothing happens at its own index
 } else {
-    $keepAfter = Engine::apply($stepRule, $board, $keepBefore);
-    $keepAfter = Engine::detonate($reactions, $board, $keepAfter);
+    // The step's own eliminations, then any reactions those crossings set off.
+    $ownAfter = Engine::apply($stepRule, $board, $keepBefore);
+    // Attribute the blast: which reactions fire now, and on which cells.
+    $mask = new KeepMask($ownAfter);
+    foreach ($reactions as $reaction) {
+        $cells = $reaction->reactCells($board, $mask);
+        if ($cells !== []) {
+            $triggered[] = ['rule' => $reaction->id(), 'count' => count($cells)];
+        }
+    }
+    $keepAfter = Engine::detonate($reactions, $board, $ownAfter);
+    foreach ($ownAfter as $i => $kept) {
+        if ($kept && !$keepAfter[$i]) {
+            $blastCells[] = $i; // crossed by a reaction, not by the step's own rule
+        }
+    }
 }
 $after = Engine::countSurvivors($keepAfter);
 
@@ -164,6 +181,8 @@ $response = [
     'pct_book' => $total > 0 ? count($removed) / $total * 100 : 0.0,
     'pct_remaining' => $before > 0 ? count($removed) / $before * 100 : 0.0,
     'reaction' => $stepRule instanceof \Puzzlebook2\Rules\Reactive,
+    'blast_cells' => $blastCells,
+    'triggered' => $triggered,
     'final' => null,
 ];
 

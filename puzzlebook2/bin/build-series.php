@@ -130,7 +130,7 @@ foreach (range(1, $total) as $n) {   // Book 1 first naturally; order doesn't ma
 }
 
 // ---- plan the whole series (Mystery chain) before solving anything --------
-$planner = new SeriesPlanner($answers, $dictionary, $spec, $total, 777, ChainVariant::REACTION_BOOK);
+$planner = new SeriesPlanner($answers, $dictionary, $spec, $total, 777, ChainVariant::REACTION_BOOK, $chains[ChainVariant::REACTION_BOOK]['steps'] ?? null);
 $plan = $planner->plan();
 
 printf(

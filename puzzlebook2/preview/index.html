@@ -240,6 +240,27 @@
   }
   .badge.printed { color: var(--accent-active); border-color: var(--accent-active); }
   .badge.final { color: var(--accent-strike); border-color: var(--accent-strike); }
+  .badge.trigger { color: var(--accent-strike); border-color: var(--accent-strike); }
+
+  /* A reaction is a standing rule, declared first -- set apart from the numbered
+     steps, and it flashes on the step where its trigger goes off. */
+  .card.standing { border-left: 3px solid var(--accent-strike); }
+  .react-tally { font-size: 0.78rem; line-height: 1.4; margin: 0.3rem 0 0; color: var(--ink-soft); }
+  .react-tally.dormant { font-style: italic; opacity: 0.8; }
+  .react-fire {
+    font-size: 0.78rem;
+    line-height: 1.4;
+    margin: 0.4rem 0 0;
+    padding: 0.35rem 0.5rem;
+    border-left: 3px solid var(--accent-strike);
+    background: color-mix(in srgb, var(--accent-strike) 10%, transparent);
+    color: var(--ink);
+  }
+  .card.standing.fired { animation: react-flash 0.9s ease-out; }
+  @keyframes react-flash {
+    0% { box-shadow: 0 0 0 3px var(--accent-strike); }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
 
   .rule-text { font-size: 0.88rem; line-height: 1.45; margin: 0 0 0.5rem; }
 
@@ -404,6 +425,13 @@
   }
   .cell.just-removed .idx { color: var(--sheet-ink); opacity: 0.6; }
 
+  /* Cells cleared by a reaction's blast this step -- stronger than an ordinary
+     just-removed so the chain reaction reads at a glance. */
+  .cell.blasted {
+    background: color-mix(in srgb, var(--accent-strike) 42%, transparent);
+    box-shadow: 0 0 0 3px var(--accent-strike);
+  }
+
   .cell .order-badge {
     position: absolute;
     top: 0;
@@ -444,7 +472,7 @@
   .swatch.answer { background: transparent; border: 2px solid var(--accent-active); }
 
   @media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; }
+    * { transition: none !important; animation: none !important; }
   }
 </style>
 
@@ -512,6 +540,8 @@ function linearIndex(grid, page, row, col) {
 
 let grid, totalWords, words, CHAIN;
 let keep, removedAtStep, stepIndex, applied;
+let reactionTally = {};   // rule type => {times, cells} fired so far this solve
+let lastTriggered = [];   // rule types that fired on the most recent step (for the flash)
 let loadedBook = null;
 let loadedChain = null;
 let currentBook = null;   // which series book is loaded (null = legacy single book)
@@ -553,8 +583,19 @@ function resetState() {
   removedAtStep = new Array(totalWords).fill(0);
   stepIndex = 0;
   applied = [];
+  reactionTally = {};
+  lastTriggered = [];
   busy = false;
   stepError = null;
+  skipReactions(); // standing rules never occupy a sequential position
+}
+
+// A reaction is a standing rule, not a step you apply in turn -- advance the
+// cursor past any reaction so it never becomes the "current" step.
+function skipReactions() {
+  while (stepIndex < CHAIN.steps.length && CHAIN.steps[stepIndex].reaction) {
+    stepIndex++;
+  }
 }
 
 async function fetchJson(path) {
@@ -617,8 +658,8 @@ function clearRevealHighlights() {
 // another step (eliminate or reveal) is about to be applied, so it never lingers
 // and shows an earlier step's work by mistake.
 function clearJustRemoved() {
-  document.querySelectorAll(".cell.just-removed").forEach((el) => {
-    el.classList.remove("just-removed");
+  document.querySelectorAll(".cell.just-removed, .cell.blasted").forEach((el) => {
+    el.classList.remove("just-removed", "blasted");
   });
 }
 
@@ -648,17 +689,53 @@ function markAnswer(i) {
 
 function fmtPct(n) { return n.toFixed(1) + "%"; }
 
+// "BoomReactionRule" -> "BOOM", "PopBlastRule" -> "POP": a short label for the trigger.
+function reactionLabel(type) {
+  return String(type || "").replace(/(Reaction)?(Blast)?Rule$/, "").toUpperCase();
+}
+
 function updateGlobalStats() {
   const remaining = keep.reduce((n, k) => n + (k ? 1 : 0), 0);
   const removedPct = ((totalWords - remaining) / totalWords) * 100;
   statRemaining.textContent = remaining;
   statPct.textContent = fmtPct(removedPct);
-  statStage.textContent = stepIndex >= CHAIN.steps.length ? "done" : `${stepIndex + 1} / ${CHAIN.steps.length}`;
+  // Count only the sequential (non-reaction) steps -- standing rules aren't "steps".
+  const seqTotal = CHAIN.steps.filter((s) => !s.reaction).length;
+  const seqDone = CHAIN.steps.slice(0, stepIndex).filter((s) => !s.reaction).length;
+  statStage.textContent = stepIndex >= CHAIN.steps.length ? "done" : `${seqDone + 1} / ${seqTotal}`;
 }
 
 function renderRail() {
   railEl.innerHTML = "";
+
+  // Standing rules first: reactions are declared up front and fire whenever
+  // their trigger is crossed, no matter when -- they are not applied in turn.
+  CHAIN.steps.forEach((step) => {
+    if (!step.reaction) return;
+    const type = step.rule && step.rule.type;
+    const tally = reactionTally[type];
+    const fired = lastTriggered.includes(type);
+    const card = document.createElement("div");
+    card.className = `card standing${fired ? " fired" : ""}`;
+    let html = `
+      <div class="card-head">
+        <h2>Always on</h2>
+        <span class="badge trigger">trigger</span>
+      </div>
+      <p class="rule-text">${step.rule_text}</p>
+    `;
+    if (tally) {
+      const when = tally.firings.map((f) => `rule ${f.step} (${f.cells})`).join(", ");
+      html += `<p class="react-tally">💥 went off <b>${tally.times}</b> time${tally.times === 1 ? "" : "s"}, clearing <b>${tally.cells}</b> word${tally.cells === 1 ? "" : "s"}.<br>Triggered on: <b>${when}</b>.</p>`;
+    } else {
+      html += `<p class="react-tally dormant">Hasn't been triggered yet — watch for its word to be crossed out.</p>`;
+    }
+    card.innerHTML = html;
+    railEl.appendChild(card);
+  });
+
   CHAIN.steps.forEach((step, idx) => {
+    if (step.reaction) return; // rendered above as a standing rule
     const state = idx < stepIndex ? "done" : idx === stepIndex ? "current" : "upcoming";
     const card = document.createElement("div");
     card.className = `card is-${state}`;
@@ -699,6 +776,9 @@ function renderRail() {
             <b>${record.after}</b> word${record.after === 1 ? "" : "s"} left
           </p>
         `;
+        (record.triggered || []).forEach((t) => {
+          html += `<p class="react-fire">💥 crossing a word here set off <b>${reactionLabel(t.rule)}</b> — it cleared <b>${t.count}</b> word${t.count === 1 ? "" : "s"}.</p>`;
+        });
         if (record.final) {
           const ok = record.final.ok;
           html += `
@@ -749,10 +829,13 @@ function renderRail() {
 }
 
 async function applyOneStep() {
-  if (!CHAIN || stepIndex >= CHAIN.steps.length || busy) return;
+  if (!CHAIN || busy) return;
+  skipReactions();                               // never "apply" a standing rule
+  if (stepIndex >= CHAIN.steps.length) { renderRail(); return; }
 
   busy = true;
   stepError = null;
+  lastTriggered = [];
   renderRail();
 
   try {
@@ -772,6 +855,20 @@ async function applyOneStep() {
     if (data.kind === "eliminate") {
       keep = data.keep;
       applyStrikes(data.removed, CHAIN.steps[stepIndex].id);
+      // A reaction that went off this step: tally it, flash its standing card,
+      // and mark the cells it blasted distinctly from the step's own removals.
+      const firedAt = CHAIN.steps[stepIndex].id;
+      lastTriggered = (data.triggered || []).map((t) => t.rule);
+      (data.triggered || []).forEach((t) => {
+        const e = reactionTally[t.rule] || { times: 0, cells: 0, firings: [] };
+        e.times += 1;
+        e.cells += t.count;
+        e.firings.push({ step: firedAt, cells: t.count });
+        reactionTally[t.rule] = e;
+      });
+      (data.blast_cells || []).forEach((i) => {
+        if (cellEls[i]) cellEls[i].classList.add("blasted");
+      });
       if (data.final && data.final.ok) {
         markAnswer(data.final.survivor_indices[0]);
       }
@@ -781,6 +878,7 @@ async function applyOneStep() {
 
     applied[stepIndex] = data;
     stepIndex++;
+    skipReactions();
     updateGlobalStats();
   } catch (err) {
     stepError = `Couldn't reach the server: ${String((err && err.message) || err)}`;

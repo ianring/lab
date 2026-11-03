@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Puzzlebook2\Series;
 
 use Puzzlebook2\Board\BoardSpec;
+use Puzzlebook2\Chain\Engine;
 use Puzzlebook2\Dictionary\Dictionary;
+use Puzzlebook2\Rules\SpellingRuleBase;
 use Puzzlebook2\Solver\Rng;
 
 /**
@@ -48,6 +50,7 @@ final class SeriesPlanner
         private int $totalBooks,
         private int $seed = 777,
         private ?int $reactionBook = null,
+        private ?array $reactionChainSteps = null,
     ) {
     }
 
@@ -235,6 +238,7 @@ final class SeriesPlanner
         $wantBombs = 2;
         $offsets = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
 
+        $chainRules = $this->reactionSpellingRules();
         $triggers = $this->pickBoomTriggers($wantBombs);
         $wantBombs = min($wantBombs, count($triggers));
 
@@ -245,7 +249,21 @@ final class SeriesPlanner
         foreach ($triggers as $t) {
             $used[strtolower($t)] = true;
         }
-        $neighbours = $this->neighbourPool($used);
+
+        // The blast fires the instant the trigger is crossed, so for it to clear
+        // anything its neighbours must OUTLIVE the trigger -- still be standing at
+        // that step. A boom word dies at the VowelRun absorber, so victims are
+        // drawn to die LATER (at the final sweep), not the usual absorber pool, or
+        // the blast is a cosmetic no-op. Without the chain we fall back to that pool.
+        $triggerDeath = 0;
+        if ($chainRules !== []) {
+            foreach ($triggers as $t) {
+                $triggerDeath = max($triggerDeath, $this->deathStep($t, $chainRules));
+            }
+        }
+        $neighbours = $chainRules === []
+            ? $this->neighbourPool($used)
+            : $this->lateVictimPool($used, $triggerDeath, $chainRules);
         $np = 0;
 
         $cells = Rng::shuffle($spec->allCells(), $this->seed + 9000 + $b);
@@ -305,6 +323,74 @@ final class SeriesPlanner
         }
         $found = Rng::shuffle($found, $this->seed + 4242);
         return array_slice($found, 0, $k);
+    }
+
+    /**
+     * The reaction book's spelling rules, in step order (the final sweep
+     * included), so the planter can tell WHEN each word would be crossed out.
+     * Empty when no chain was supplied (e.g. the single-book test path).
+     *
+     * @return array<int, SpellingRuleBase> step index => rule
+     */
+    private function reactionSpellingRules(): array
+    {
+        if ($this->reactionChainSteps === null) {
+            return [];
+        }
+        $out = [];
+        foreach ($this->reactionChainSteps as $idx => $step) {
+            if (!isset($step['rule']['type'])) {
+                continue;
+            }
+            try {
+                $rule = Engine::ruleFromConfig($step['rule']);
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($rule instanceof SpellingRuleBase) {
+                $out[$idx] = $rule;
+            }
+        }
+        return $out;
+    }
+
+    /** The step at which the chain first crosses $word out (PHP_INT_MAX if never). */
+    private function deathStep(string $word, array $chainRules): int
+    {
+        foreach ($chainRules as $idx => $rule) {
+            if ($rule->failsWord($word)) {
+                return $idx;
+            }
+        }
+        return PHP_INT_MAX;
+    }
+
+    /**
+     * Victim words that die LATER than $afterStep in the reaction chain -- still
+     * standing when the trigger goes off, so the blast actually clears them --
+     * 4..6 letters, unused. Scans a shuffled dictionary so victims vary book to
+     * book, stopping once enough are found.
+     *
+     * @param array<string,bool> $used
+     * @return string[]
+     */
+    private function lateVictimPool(array $used, int $afterStep, array $chainRules): array
+    {
+        $pool = [];
+        foreach (Rng::shuffle($this->dictionary->all(), $this->seed + 1717) as $w) {
+            $len = strlen($w);
+            if ($len < 4 || $len > 6 || isset($used[$w])) {
+                continue;
+            }
+            $death = $this->deathStep($w, $chainRules);
+            if ($death > $afterStep && $death !== PHP_INT_MAX) {
+                $pool[] = $w;
+                if (count($pool) >= 128) {
+                    break;
+                }
+            }
+        }
+        return $pool;
     }
 
     /**

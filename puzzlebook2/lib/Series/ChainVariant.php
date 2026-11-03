@@ -328,6 +328,18 @@ final class ChainVariant
             $out[] = array_pop($byFam[$best]);
             $lastFam = $best;
         }
+
+        // Vary which scarce rule LEADS the book. Strict scarce-first put the
+        // single scarcest rule at position 1 every time, so Palindrome (the
+        // scarcest reusable rule) was rule 1 in 13 of 21 books. Shuffle the early
+        // block per book: these rules all stay in the first HEAD positions -- still
+        // early enough that the pool is full and each crosses out its full share --
+        // only their order among themselves changes, so rule 1 differs book to book.
+        $head = min(8, count($out));
+        if ($head > 1) {
+            $shuffled = Rng::shuffle(array_slice($out, 0, $head), $seed + 31337);
+            $out = array_merge($shuffled, array_slice($out, $head));
+        }
         return $out;
     }
 
@@ -430,14 +442,22 @@ final class ChainVariant
             'final' => true,
             'rule' => ['type' => $final],
         ];
+        // Triggered (reaction) rules are STANDING rules: declared and numbered
+        // FIRST in the book -- Rule 1 is the trigger the player watches for all
+        // the way through -- even though the engine fires them reactively the
+        // instant their trigger is crossed (ChainRunner/preview skip them in
+        // sequence and detonate after each step, so their position is free).
+        $reactions = [];
         if ($withReaction) {
-            $steps[] = [
+            $reactions[] = [
                 'kind' => 'eliminate',
                 'printed' => true,
+                'reaction' => true,
                 'rule' => ['type' => 'BoomReactionRule'],
                 'construction' => ['derived' => true],
             ];
         }
+        $steps = array_merge($reactions, $steps);
 
         foreach ($steps as $i => &$step) {
             $step['id'] = $i + 1;
