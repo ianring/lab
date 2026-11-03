@@ -47,6 +47,21 @@ abstract class ReactionBlastRule implements \Puzzlebook2\Rules\Reactive, \Puzzle
     /** The substring that marks a trigger word (lowercase). */
     abstract protected function needle(): string;
 
+    /** The trigger needle, for the series planter (which plants the triggers). */
+    public function triggerNeedle(): string
+    {
+        return $this->needle();
+    }
+
+    /**
+     * The blast footprint as [dr, dc] offsets, for the planter to reserve.
+     * @return array<int,array{0:int,1:int}>
+     */
+    public function footprintOffsets(): array
+    {
+        return $this->blastOffsets();
+    }
+
     /**
      * Footprint as [dr, dc] offsets from the trigger cell, within the same page.
      * Off-page offsets are silently clipped, so a rule may over-generate (e.g.
@@ -135,19 +150,13 @@ abstract class ReactionBlastRule implements \Puzzlebook2\Rules\Reactive, \Puzzle
 
     public function globalConstraints(ChainContext $ctx): iterable
     {
-        $needle = $this->needle();
-
-        yield new StandingPatternConstraint(
-            ownerRuleId: $this->id(),
-            stepIndex: $ctx->stepIndex(),
-            resolver: $ctx->resolver(),
-            spec: $ctx->board()->spec(),
-            scopesTouching: static function (int $cell) use ($needle): iterable {
-                yield new Scope(['center' => $cell]);
-            },
-            pattern: static fn (array $words): bool => WordTags::contains($words['center'], $needle),
-            label: "no unplanned standing word may contain '" . $needle . "'",
-        );
+        // No standing-pattern guard (as BoomReactionRule also had none): the
+        // series builds a reaction book from a dictionary with this needle
+        // removed, so the ONLY trigger words are the ones the planter plants.
+        // A board-wide "no unplanned needle word" constraint would instead REJECT
+        // those planted triggers -- they are owned by a PlantRule, not by this
+        // rule, so the constraint would see them as unplanned and refuse them.
+        return [];
     }
 
     public function kind(): string

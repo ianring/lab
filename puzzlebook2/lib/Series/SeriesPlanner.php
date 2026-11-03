@@ -49,8 +49,8 @@ final class SeriesPlanner
         private BoardSpec $spec,
         private int $totalBooks,
         private int $seed = 777,
-        private ?int $reactionBook = null,
-        private ?array $reactionChainSteps = null,
+        /** @var array<int,array{type:string,needle:string,offsets:array,steps:array}> bookNo => reaction */
+        private array $reactions = [],
     ) {
     }
 
@@ -171,16 +171,22 @@ final class SeriesPlanner
             $occupied[1][$books[1]['answer_cell']] = true;
         }
 
-        // ---- BOOM bombs, one book only: trigger + its reserved 3x3 block ----
+        // ---- triggered-rule placements: each reaction book gets its trigger
+        // words planted and their blast footprints reserved. One per book.
         $bombs = [];
-        if ($this->reactionBook !== null && $this->reactionBook >= 1 && $this->reactionBook <= $this->totalBooks) {
-            $bombs = $this->placeBombs($this->reactionBook, $books, $occupied, $mysteries);
+        foreach ($this->reactions as $bookNo => $reaction) {
+            if ($bookNo < 1 || $bookNo > $this->totalBooks) {
+                continue;
+            }
+            foreach ($this->placeReaction($bookNo, $reaction, $books, $occupied, $mysteries) as $placed) {
+                $bombs[] = $placed;
+            }
         }
 
         return [
             'answers' => $this->answers,
             'mysteries' => $mysteries,
-            'reaction_book' => $this->reactionBook,
+            'reaction_books' => array_keys($this->reactions),
             'bombs' => $bombs,
             'addressee' => $addressee,
             'acrostic_page' => $acrosticPage,
@@ -225,22 +231,29 @@ final class SeriesPlanner
     }
 
     /**
-     * Plant the BOOM bombs for one book: a trigger word (contains "boom", so the
-     * VowelRun absorber crosses it out) at an interior cell, and eight eliminable
-     * neighbour words filling its 3x3 block -- which reserves the block so no
-     * pair or answer can land inside a blast. Returns a description per bomb.
+     * Plant one reaction book's triggers and reserve each blast footprint. The
+     * trigger word (containing the reaction's needle) is drawn to die EARLY in
+     * the book's chain, so the blast fires while its footprint still stands; the
+     * footprint is filled with words drawn to die LATER (so they outlive the
+     * trigger and the blast actually clears them). The footprint shape is the
+     * rule's own offsets, clipped to the page. Best-effort: if it cannot place a
+     * bomb, the reaction simply stays an inert standing rule -- no build failure.
      *
-     * @return array<int,array{center:int,trigger:string,victims:int[]}>
+     * @param array{type:string,needle:string,offsets:array,steps:array} $reaction
+     * @return array<int,array{center:int,trigger:string,victims:int[],needle:string}>
      */
-    private function placeBombs(int $b, array &$books, array &$occupied, array $mysteries): array
+    private function placeReaction(int $b, array $reaction, array &$books, array &$occupied, array $mysteries): array
     {
         $spec = $this->spec;
-        $wantBombs = 2;
-        $offsets = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+        $needle = (string) $reaction['needle'];
+        $offsets = $reaction['offsets'];
+        $wantBombs = 1;
 
-        $chainRules = $this->reactionSpellingRules();
-        $triggers = $this->pickBoomTriggers($wantBombs);
-        $wantBombs = min($wantBombs, count($triggers));
+        $chainRules = $this->reactionSpellingRules($reaction['steps'] ?? []);
+        $triggers = $this->pickTriggers($needle, $chainRules, $wantBombs);
+        if ($triggers === []) {
+            return []; // no eliminable trigger word -> reaction stays inert
+        }
 
         $used = array_fill_keys(array_map('strtolower', $this->answers), true);
         foreach ($mysteries as $m) {
@@ -250,95 +263,109 @@ final class SeriesPlanner
             $used[strtolower($t)] = true;
         }
 
-        // The blast fires the instant the trigger is crossed, so for it to clear
-        // anything its neighbours must OUTLIVE the trigger -- still be standing at
-        // that step. A boom word dies at the VowelRun absorber, so victims are
-        // drawn to die LATER (at the final sweep), not the usual absorber pool, or
-        // the blast is a cosmetic no-op. Without the chain we fall back to that pool.
         $triggerDeath = 0;
-        if ($chainRules !== []) {
-            foreach ($triggers as $t) {
-                $triggerDeath = max($triggerDeath, $this->deathStep($t, $chainRules));
-            }
+        foreach ($triggers as $t) {
+            $triggerDeath = max($triggerDeath, $this->deathStep($t, $chainRules));
         }
-        $neighbours = $chainRules === []
+        $victimsPool = $chainRules === []
             ? $this->neighbourPool($used)
-            : $this->lateVictimPool($used, $triggerDeath, $chainRules);
-        $np = 0;
+            : $this->lateVictimPool($used, $triggerDeath, $chainRules, $needle);
+        $vp = 0;
 
         $cells = Rng::shuffle($spec->allCells(), $this->seed + 9000 + $b);
         $bombs = [];
         foreach ($cells as $center) {
-            if (count($bombs) >= $wantBombs) {
-                break;
+            if (count($bombs) >= $wantBombs || isset($occupied[$b][$center])) {
+                continue;
             }
             [$p, $r, $c] = $spec->coordsOf($center);
-            if ($r < 1 || $r > $spec->rows - 2 || $c < 1 || $c > $spec->cols - 2) {
-                continue; // need all eight neighbours on the same page
-            }
-            $block = [$center];
+            // The footprint cells on this page (offsets clipped to the edges).
+            $foot = [];
             foreach ($offsets as [$dr, $dc]) {
-                $block[] = $spec->linearIndex($p, $r + $dr, $c + $dc);
+                $rr = $r + $dr;
+                $cc = $c + $dc;
+                if ($rr < 0 || $rr >= $spec->rows || $cc < 0 || $cc >= $spec->cols) {
+                    continue;
+                }
+                $cell = $spec->linearIndex($p, $rr, $cc);
+                if ($cell !== $center) {
+                    $foot[$cell] = true;
+                }
             }
-            $free = true;
-            foreach ($block as $cell) {
+            $foot = array_keys($foot);
+            if ($foot === [] || $vp + count($foot) > count($victimsPool)) {
+                continue;
+            }
+            $clash = false;
+            foreach ($foot as $cell) {
                 if (isset($occupied[$b][$cell])) {
-                    $free = false;
+                    $clash = true;
                     break;
                 }
             }
-            if (!$free || $np + 8 > count($neighbours)) {
+            if ($clash) {
                 continue;
             }
             $k = count($bombs);
-            $trigger = $triggers[$k];
-            $books[$b]['plants'][] = ['cell' => $center, 'word' => $trigger, 'id' => "boom-trigger-{$b}-{$k}", 'role' => 'boom_trigger'];
+            $trigger = $triggers[$k] ?? $triggers[0];
+            $books[$b]['plants'][] = ['cell' => $center, 'word' => $trigger, 'id' => "react-{$needle}-trigger-{$b}-{$k}", 'role' => 'react_trigger'];
             $occupied[$b][$center] = true;
             $victims = [];
-            foreach ($offsets as $i => [$dr, $dc]) {
-                $cell = $spec->linearIndex($p, $r + $dr, $c + $dc);
-                $books[$b]['plants'][] = ['cell' => $cell, 'word' => $neighbours[$np++], 'id' => "boom-victim-{$b}-{$k}-{$i}", 'role' => 'boom_victim'];
+            foreach ($foot as $i => $cell) {
+                $books[$b]['plants'][] = ['cell' => $cell, 'word' => $victimsPool[$vp++], 'id' => "react-{$needle}-victim-{$b}-{$k}-{$i}", 'role' => 'react_victim'];
                 $occupied[$b][$cell] = true;
                 $victims[] = $cell;
             }
-            $bombs[] = ['center' => $center, 'trigger' => $trigger, 'victims' => $victims];
-        }
-        if ($bombs === []) {
-            throw new \RuntimeException("Reaction book {$b}: could not place any BOOM bomb (grid too crowded or no words).");
+            $bombs[] = ['center' => $center, 'trigger' => $trigger, 'victims' => $victims, 'needle' => $needle];
         }
         return $bombs;
     }
 
-    /** Up to $k distinct dictionary words containing "boom" (all eliminable -- "oo" is a vowel run). @return string[] */
-    private function pickBoomTriggers(int $k): array
+    /**
+     * Up to $k trigger words containing $needle, 4..6 letters, that the book's
+     * chain actually crosses out (so the blast fires), ordered earliest-dying
+     * first so the trigger dies before its later-dying victims. @return string[]
+     */
+    private function pickTriggers(string $needle, array $chainRules, int $k): array
     {
-        $found = [];
+        $cands = [];
         foreach ($this->dictionary->all() as $w) {
             $len = strlen($w);
-            // 4..6 letters => the "oo" in "boom" is a vowel run the absorber
-            // crosses, so the trigger is reliably eliminated (and thus fires).
-            if (str_contains($w, 'boom') && $len >= 4 && $len <= 6) {
-                $found[] = $w;
+            // 4..9 letters: long enough to read, short enough to sit in the grid.
+            // Eliminability is enforced below (deathStep finite), so length is only
+            // a preference -- rarer needles like DIAG need the wider range to find
+            // any trigger at all.
+            if ($len >= 4 && $len <= 9 && str_contains($w, $needle)) {
+                $cands[] = $w;
             }
         }
-        $found = Rng::shuffle($found, $this->seed + 4242);
-        return array_slice($found, 0, $k);
+        $cands = Rng::shuffle($cands, $this->seed + 4242);
+        if ($chainRules !== []) {
+            $withDeath = [];
+            foreach ($cands as $w) {
+                $d = $this->deathStep($w, $chainRules);
+                if ($d !== PHP_INT_MAX) {
+                    $withDeath[] = [$w, $d];
+                }
+            }
+            usort($withDeath, static fn (array $a, array $b): int => $a[1] <=> $b[1]);
+            $cands = array_map(static fn (array $x): string => $x[0], $withDeath);
+        }
+        return array_slice($cands, 0, $k);
     }
 
     /**
-     * The reaction book's spelling rules, in step order (the final sweep
-     * included), so the planter can tell WHEN each word would be crossed out.
-     * Empty when no chain was supplied (e.g. the single-book test path).
+     * A book's spelling rules, in step order (the final sweep included), so the
+     * planter can tell WHEN each word would be crossed out. Empty when no chain
+     * was supplied (the single-book test path).
      *
+     * @param array $steps the composed chain steps
      * @return array<int, SpellingRuleBase> step index => rule
      */
-    private function reactionSpellingRules(): array
+    private function reactionSpellingRules(array $steps): array
     {
-        if ($this->reactionChainSteps === null) {
-            return [];
-        }
         $out = [];
-        foreach ($this->reactionChainSteps as $idx => $step) {
+        foreach ($steps as $idx => $step) {
             if (!isset($step['rule']['type'])) {
                 continue;
             }
@@ -374,12 +401,13 @@ final class SeriesPlanner
      * @param array<string,bool> $used
      * @return string[]
      */
-    private function lateVictimPool(array $used, int $afterStep, array $chainRules): array
+    private function lateVictimPool(array $used, int $afterStep, array $chainRules, string $needle): array
     {
         $pool = [];
         foreach (Rng::shuffle($this->dictionary->all(), $this->seed + 1717) as $w) {
             $len = strlen($w);
-            if ($len < 4 || $len > 6 || isset($used[$w])) {
+            // Exclude the needle so a victim is never itself an (unplanned) trigger.
+            if ($len < 4 || $len > 6 || isset($used[$w]) || str_contains($w, $needle)) {
                 continue;
             }
             $death = $this->deathStep($w, $chainRules);
@@ -428,14 +456,24 @@ final class SeriesPlanner
         $cols = $this->spec->cols;
         $rows = $this->spec->rows;
         $answerSet = array_fill_keys(array_map('strtolower', $this->answers), true);
+        // No Mystery word may carry any reaction needle, or (planted and then
+        // crossed in that book) it would be an unplanned trigger setting off a blast.
+        $needles = array_values(array_unique(array_map(static fn (array $r): string => $r['needle'], $this->reactions)));
         $candidates = [];
         foreach ($this->dictionary->all() as $w) {
             $len = strlen($w);
             if ($len < 4 || $len > 6 || $len > $rows || isset($answerSet[$w]) || strpos($w, 'e') !== false) {
                 continue;
             }
-            if (str_contains($w, 'boom')) {
-                continue; // never let a Mystery word be a BOOM word -- it would be an unplanned trigger
+            $hasNeedle = false;
+            foreach ($needles as $needle) {
+                if (str_contains($w, $needle)) {
+                    $hasNeedle = true;
+                    break;
+                }
+            }
+            if ($hasNeedle) {
+                continue;
             }
             if (!preg_match('/[aiou]{2}/', $w)) {
                 continue;

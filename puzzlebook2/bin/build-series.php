@@ -130,7 +130,24 @@ foreach (range(1, $total) as $n) {   // Book 1 first naturally; order doesn't ma
 }
 
 // ---- plan the whole series (Mystery chain) before solving anything --------
-$planner = new SeriesPlanner($answers, $dictionary, $spec, $total, 777, ChainVariant::REACTION_BOOK, $chains[ChainVariant::REACTION_BOOK]['steps'] ?? null);
+// Each reaction book's trigger needle + blast footprint (for planting triggers
+// and reserving blast zones) and its chain (so victims outlive the trigger).
+$reactions = [];
+$reactionNeedles = [];
+foreach (ChainVariant::REACTIONS as $bookNo => $type) {
+    $rule = Engine::ruleFromConfig(['type' => $type]);
+    if (!$rule instanceof \Puzzlebook2\Rules\GeometricRules\ReactionBlastRule) {
+        continue;
+    }
+    $reactions[$bookNo] = [
+        'type' => $type,
+        'needle' => $rule->triggerNeedle(),
+        'offsets' => $rule->footprintOffsets(),
+        'steps' => $chains[$bookNo]['steps'] ?? [],
+    ];
+    $reactionNeedles[$bookNo] = $rule->triggerNeedle();
+}
+$planner = new SeriesPlanner($answers, $dictionary, $spec, $total, 777, $reactions);
 $plan = $planner->plan();
 
 printf(
@@ -159,16 +176,27 @@ file_put_contents($outRoot . '/plan.json', json_encode([
     'places' => $plan['places'],
     'box_number' => $plan['box_number'],
     'box_find' => $plan['box_find'],
-    'reaction_book' => $plan['reaction_book'] ?? null,
+    'reaction_books' => $plan['reaction_books'] ?? [],
     'bombs' => $plan['bombs'] ?? [],
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
 
-// The reaction book (if any) builds from a BOOM-free dictionary so no stray
-// trigger word can appear incidentally; its real BOOM triggers are planted.
-$boomFree = new Dictionary(array_values(array_filter(
-    $dictionary->all(),
-    static fn (string $w): bool => !str_contains($w, 'boom'),
-)));
+// A reaction book builds from a dictionary with its OWN needle removed, so the
+// only words carrying it are the planted triggers (the rule reacts to any). One
+// filtered dictionary per needle, memoized.
+$needleFreeDicts = [];
+$dictForBook = static function (int $n) use (&$needleFreeDicts, $reactionNeedles, $dictionary): Dictionary {
+    $needle = $reactionNeedles[$n] ?? null;
+    if ($needle === null) {
+        return $dictionary;
+    }
+    if (!isset($needleFreeDicts[$needle])) {
+        $needleFreeDicts[$needle] = new Dictionary(array_values(array_filter(
+            $dictionary->all(),
+            static fn (string $w): bool => !str_contains($w, $needle),
+        )));
+    }
+    return $needleFreeDicts[$needle];
+};
 
 $seriesStart = microtime(true);
 $results = [];
@@ -181,7 +209,7 @@ foreach ($series['books'] as $bookCfg) {
     $baseSeed = (int) $bookCfg['seed'];
     $answerCell = $plan['books'][$n]['answer_cell'];
     $plants = $plan['books'][$n]['plants'];
-    $bookDict = $n === ChainVariant::REACTION_BOOK ? $boomFree : $dictionary;
+    $bookDict = $dictForBook($n);
     $label = $n === $capstone ? "Book {$n} (Capstone)" : "Book {$n}";
 
     // This book's own chain: the Capstone gets the borrowed diagonal, every

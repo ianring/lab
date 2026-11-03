@@ -33,7 +33,20 @@ use Puzzlebook2\Solver\Rng;
 final class ChainVariant
 {
     /** The one book (1..20) that also carries the BOOM trigger-reaction. */
-    public const REACTION_BOOK = 7;
+    /**
+     * Which book carries which triggered (reaction) rule -- one per book,
+     * declared and numbered FIRST. The planter plants each one's trigger words
+     * and reserves its blast footprint; the needle puns the shape.
+     */
+    public const REACTIONS = [
+        2 => 'RingBlastRule',
+        4 => 'PopBlastRule',
+        7 => 'BoomBlastRule',
+        9 => 'PowBlastRule',
+        13 => 'BangBlastRule',
+        17 => 'BeamBlastRule',
+        20 => 'DiagBlastRule',
+    ];
 
     private const NS = 'Puzzlebook2\\Rules\\SpellingRules\\';
     /** Always present in every book -- it catches the planted Mystery / acrostic / bomb words, which are all adjacent-vowel pairs. */
@@ -143,7 +156,7 @@ final class ChainVariant
         $chains = [];
         for ($n = 1; $n <= $total; $n++) {
             $count = $n === $capstoneBook ? 20 : 30;
-            $chains[$n] = self::compose($n, $count, $reuse, $assigned[$n], 'placeholder', $n === self::REACTION_BOOK);
+            $chains[$n] = self::compose($n, $count, $reuse, $assigned[$n], 'placeholder', self::REACTIONS[$n] ?? null);
         }
         return $chains;
     }
@@ -151,13 +164,13 @@ final class ChainVariant
     /** A single book, ignoring cross-book single-use (for inspection/tests). */
     public static function forBook(int $bookNo, string $answer): array
     {
-        return self::compose($bookNo, 30, array_keys(self::pool()), [], $answer, $bookNo === self::REACTION_BOOK);
+        return self::compose($bookNo, 30, array_keys(self::pool()), [], $answer, self::REACTIONS[$bookNo] ?? null);
     }
 
     /** The Capstone, standalone: leaner (fewer, chunkier rules). */
     public static function forCapstone(string $answer): array
     {
-        return self::compose(9001, 20, array_keys(self::pool()), [], $answer, false);
+        return self::compose(9001, 20, array_keys(self::pool()), [], $answer, null);
     }
 
     /**
@@ -170,7 +183,7 @@ final class ChainVariant
      * @param string[] $pool        rule types this book may draw from
      * @param string[] $forcedOnce  single-use rules pre-assigned to this book
      */
-    private static function compose(int $seed, int $count, array $pool, array $forcedOnce, string $answer, bool $withReaction): array
+    private static function compose(int $seed, int $count, array $pool, array $forcedOnce, string $answer, ?string $reactionType): array
     {
         $absorber = self::ABSORBERS[$seed % count(self::ABSORBERS)];
         $finalPair = self::FINALS[(intdiv($seed, 2) + 1) % count(self::FINALS)];   // de-correlate from the absorber
@@ -178,7 +191,7 @@ final class ChainVariant
         $selected = self::fillSelection(Rng::shuffle($pool, $seed), $count, $forced);
         $body = array_values(array_filter($selected, static fn (string $t): bool => $t !== $absorber));
         $ordered = self::interleave($body, $seed);
-        return self::assemble($ordered, $absorber, $finalPair, $answer, $withReaction);
+        return self::assemble($ordered, $absorber, $finalPair, $answer, $reactionType);
     }
 
     /**
@@ -421,7 +434,7 @@ final class ChainVariant
      * @param string[] $orderedTypes
      * @return array{steps: array, answer: string}
      */
-    private static function assemble(array $orderedTypes, string $absorber, array $finalPair, string $answer, bool $withReaction): array
+    private static function assemble(array $orderedTypes, string $absorber, array $finalPair, string $answer, ?string $reactionType): array
     {
         $kf = self::seedKeepFractions($orderedTypes);
         $steps = [];
@@ -448,12 +461,12 @@ final class ChainVariant
         // instant their trigger is crossed (ChainRunner/preview skip them in
         // sequence and detonate after each step, so their position is free).
         $reactions = [];
-        if ($withReaction) {
+        if ($reactionType !== null) {
             $reactions[] = [
                 'kind' => 'eliminate',
                 'printed' => true,
                 'reaction' => true,
-                'rule' => ['type' => 'BoomReactionRule'],
+                'rule' => ['type' => $reactionType],
                 'construction' => ['derived' => true],
             ];
         }
