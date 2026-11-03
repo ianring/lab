@@ -111,6 +111,12 @@ final class BookWriter
                 );
             }
             $chainForExport['steps'][$pos]['rule_text'] = $text;
+            // A reaction is a standing rule, declared first and fired whenever its
+            // trigger is crossed -- flagged so the preview and the printed book can
+            // float it to the top of the rule list instead of numbering it in line.
+            if ($rule instanceof \Puzzlebook2\Rules\Reactive) {
+                $chainForExport['steps'][$pos]['reaction'] = true;
+            }
             if (isset($verification['counts'][$stepId])) {
                 $chainForExport['steps'][$pos]['removes'] = count($verification['eliminated'][$stepId] ?? []);
                 $chainForExport['steps'][$pos]['survivors_after'] = $verification['counts'][$stepId]['after'];

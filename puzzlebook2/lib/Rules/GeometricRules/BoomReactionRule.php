@@ -36,7 +36,7 @@ use Puzzlebook2\Solver\FilledBoard;
  * a blast. The guarantee is spatial (cell ownership), not timing. See the Path 1
  * / Path 2 note in SERIES_IMPLEMENTATION.md.
  */
-final class BoomReactionRule implements Rule
+final class BoomReactionRule implements \Puzzlebook2\Rules\Reactive
 {
     use RuleIdentity;
 
@@ -57,6 +57,36 @@ final class BoomReactionRule implements Rule
             return [];
         }
         return WordTags::contains($board->wordAt($center), self::NEEDLE) ? [$victim] : [];
+    }
+
+    public function reactCells(FilledBoard $board, KeepMask $keep): array
+    {
+        $spec = $board->spec();
+        $kill = [];
+        $size = $spec->pages * $spec->rows * $spec->cols;
+        for ($cell = 0; $cell < $size; $cell++) {
+            if ($keep->isKept($cell) || !WordTags::contains($board->wordAt($cell), self::NEEDLE)) {
+                continue;
+            }
+            [$p, $r, $c] = $spec->coordsOf($cell);
+            for ($dr = -1; $dr <= 1; $dr++) {
+                for ($dc = -1; $dc <= 1; $dc++) {
+                    if ($dr === 0 && $dc === 0) {
+                        continue;
+                    }
+                    $rr = $r + $dr;
+                    $cc = $c + $dc;
+                    if ($rr < 0 || $rr >= $spec->rows || $cc < 0 || $cc >= $spec->cols) {
+                        continue;
+                    }
+                    $victim = $spec->linearIndex($p, $rr, $cc);
+                    if ($keep->isKept($victim)) {
+                        $kill[$victim] = true;
+                    }
+                }
+            }
+        }
+        return array_keys($kill);
     }
 
     public function allScopes(BoardSpec $spec): iterable

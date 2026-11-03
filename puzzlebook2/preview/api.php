@@ -26,6 +26,7 @@ require __DIR__ . '/../lib/bootstrap.php';
 
 use Puzzlebook2\Board\BoardSpec;
 use Puzzlebook2\Chain\Engine;
+use Puzzlebook2\Solver\FilledBoard;
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -121,8 +122,28 @@ if (($step['kind'] ?? '') !== 'eliminate') {
     apiFail("Step kind '{$step['kind']}' is not supported by the v2 engine yet (reveals are out).");
 }
 
+// Reactions are standing rules, not sequential steps -- they fire the instant a
+// step crosses their trigger. Collect them once, then after each ordinary step
+// detonate them to a fixpoint so a blast's footprint falls in the same step that
+// crossed its trigger (and chain reactions cascade). A step that is itself a
+// reaction is a no-op in the sequence (it is folded into the others).
+$board = new FilledBoard($spec, $words);
+$reactions = [];
+foreach ($steps as $s) {
+    $r = Engine::ruleFromConfig($s['rule']);
+    if ($r instanceof \Puzzlebook2\Rules\Reactive) {
+        $reactions[] = $r;
+    }
+}
+
 $before = Engine::countSurvivors($keepBefore);
-$keepAfter = Engine::applyRule($words, $spec, $keepBefore, $step['rule']);
+$stepRule = Engine::ruleFromConfig($step['rule']);
+if ($stepRule instanceof \Puzzlebook2\Rules\Reactive) {
+    $keepAfter = $keepBefore; // standing rule: nothing happens at its own index
+} else {
+    $keepAfter = Engine::apply($stepRule, $board, $keepBefore);
+    $keepAfter = Engine::detonate($reactions, $board, $keepAfter);
+}
 $after = Engine::countSurvivors($keepAfter);
 
 $removed = [];
@@ -142,6 +163,7 @@ $response = [
     'total' => $total,
     'pct_book' => $total > 0 ? count($removed) / $total * 100 : 0.0,
     'pct_remaining' => $before > 0 ? count($removed) / $before * 100 : 0.0,
+    'reaction' => $stepRule instanceof \Puzzlebook2\Rules\Reactive,
     'final' => null,
 ];
 

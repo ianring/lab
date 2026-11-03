@@ -224,6 +224,27 @@ final class WordTags
     }
 
     /**
+     * True if $word fits a crossword-style slot $pattern: it is exactly as long
+     * as $pattern, and every character of $pattern that is NOT '_' matches that
+     * same position's letter. A '_' is a blank -- any letter fits it. Pattern
+     * letters are lowercase, like the word. "bake" fits "_a_e"; "lake" does too;
+     * "cake" fits "c___e" only if it were five letters -- length must match.
+     */
+    public static function matchesPattern(string $word, string $pattern): bool
+    {
+        $len = strlen($pattern);
+        if (strlen($word) !== $len) {
+            return false;
+        }
+        for ($i = 0; $i < $len; $i++) {
+            if ($pattern[$i] !== '_' && $pattern[$i] !== $word[$i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * The mirror of isInAlphabeticalOrder(): true if $word's letters never go
      * FORWARD through the alphabet -- "zoom", "trod", "sponged". Repeated
      * letters are allowed (they don't go forward either).

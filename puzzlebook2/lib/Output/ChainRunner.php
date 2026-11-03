@@ -31,6 +31,18 @@ final class ChainRunner
         $total = count($words);
         $keep = array_fill(0, $total, true);
 
+        // Reactions are standing rules, not sequential steps: they fire the
+        // instant a step crosses their trigger. Separate them out, then detonate
+        // them to a fixpoint after EACH ordinary step. Any footprint they clear
+        // is attributed to the step that crossed the trigger -- that is where the
+        // player sees the blast go off.
+        $reactions = [];
+        foreach ($plan->rules() as $pos => $rule) {
+            if ($rule instanceof \Puzzlebook2\Rules\Reactive) {
+                $reactions[$pos] = $rule;
+            }
+        }
+
         $lines = [];
         $eliminated = [];
         $counts = [];
@@ -38,8 +50,12 @@ final class ChainRunner
 
         foreach ($plan->steps() as $pos => $step) {
             $rule = $plan->rules()[$pos];
+            if ($rule instanceof \Puzzlebook2\Rules\Reactive) {
+                continue; // standing rule -- fired after each step below, not run in sequence
+            }
             $before = Engine::countSurvivors($keep);
             $keepAfter = Engine::apply($rule, $board, $keep);
+            $keepAfter = Engine::detonate($reactions, $board, $keepAfter);
 
             $removedWords = [];
             foreach ($keep as $i => $wasKept) {

@@ -74,6 +74,39 @@ final class Engine
         return $out;
     }
 
+    /**
+     * Fire every reaction rule to a fixpoint against the current keep-mask.
+     * Called by the replay/verify path and the preview AFTER each ordinary
+     * step: a reaction only fires on an already-crossed trigger and only clears
+     * still-standing victims, so applying it here detonates exactly the triggers
+     * the just-run step crossed, while their footprints still stand. Idempotent,
+     * so running it every step never double-counts; the loop lets one blast's
+     * removals set off another reaction's trigger (a chain reaction).
+     *
+     * @param \Puzzlebook2\Rules\Reactive[] $reactions
+     * @param bool[] $keep
+     * @return bool[]
+     */
+    public static function detonate(array $reactions, FilledBoard $board, array $keep): array
+    {
+        if ($reactions === []) {
+            return $keep;
+        }
+        do {
+            $changed = false;
+            $mask = new KeepMask($keep);
+            foreach ($reactions as $reaction) {
+                foreach ($reaction->reactCells($board, $mask) as $cell) {
+                    if ($keep[$cell]) {
+                        $keep[$cell] = false;
+                        $changed = true;
+                    }
+                }
+            }
+        } while ($changed);
+        return $keep;
+    }
+
     /** @param bool[] $keep */
     public static function countSurvivors(array $keep): int
     {

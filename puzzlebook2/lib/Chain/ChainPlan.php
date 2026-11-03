@@ -59,6 +59,9 @@ final class ChainPlan
     /** @var string[] */
     private array $problems = [];
 
+    /** @var array<string, array<string,true>> process-wide memo: ruleId|dictHash => words it crosses out */
+    private static array $failingSets = [];
+
     /**
      * @param array<int,array{cell:int,word:string,id?:string,role?:string}> $plantSpecs
      */
@@ -175,7 +178,8 @@ final class ChainPlan
             $prefixPools[$pos] = $pool;
             $rule = $this->rules[$pos];
             if ($rule instanceof SpellingRuleBase && $pos !== $this->finalPos) {
-                $pool = array_values(array_filter($pool, static fn (string $w): bool => !$rule->failsWord($w)));
+                $fail = $this->failingSet($rule);
+                $pool = array_values(array_filter($pool, static fn (string $w): bool => !isset($fail[$w])));
             }
         }
         $fullSurvivors = $pool; // survives every non-final spelling rule
@@ -479,6 +483,9 @@ final class ChainPlan
      */
     private function plantDeathStep(string $word): ?int
     {
+        // failsWord() directly, NOT the dict-derived failingSet: a planted word
+        // (a bomb trigger, a Mystery) may be excluded from this book's word list
+        // -- book 7's list has no BOOM words -- yet must still be eliminable.
         foreach ($this->steps as $pos => $step) {
             $rule = $this->rules[$pos];
             if ($rule instanceof SpellingRuleBase && $rule->failsWord($word)) {
@@ -486,6 +493,31 @@ final class ChainPlan
             }
         }
         return null;
+    }
+
+    /**
+     * The set of dictionary words a spelling rule crosses out, computed once per
+     * (rule, word list) and memoized across every book and seed attempt in the
+     * process -- a rule's matches never change, and ChainPlan::load() runs up to
+     * three times per book (one per seed), so recomputing this each time was pure
+     * waste. Prefix pools, plant death-steps and acrostic candidates all read it
+     * as O(1) set membership instead of re-running failsWord().
+     *
+     * @return array<string,true>
+     */
+    private function failingSet(SpellingRuleBase $rule): array
+    {
+        $key = $rule->id() . '|' . $this->dictionary->hash();
+        if (!isset(self::$failingSets[$key])) {
+            $set = [];
+            foreach ($this->dictionary->all() as $w) {
+                if ($rule->failsWord($w)) {
+                    $set[$w] = true;
+                }
+            }
+            self::$failingSets[$key] = $set;
+        }
+        return self::$failingSets[$key];
     }
 
     /**
@@ -513,7 +545,7 @@ final class ChainPlan
                     continue;
                 }
                 $rule = $this->rules[$pos];
-                if ($rule instanceof SpellingRuleBase && $rule->failsWord($w)) {
+                if ($rule instanceof SpellingRuleBase && isset($this->failingSet($rule)[$w])) {
                     $out[] = $w;
                     break;
                 }

@@ -13,7 +13,13 @@ require __DIR__ . '/Rules/ExactAdjacentPairRule.php';
 use Puzzlebook2\Board\BoardSpec;
 use Puzzlebook2\Board\HorizontalAdjacency;
 use Puzzlebook2\Board\VerticalAdjacency;
+use Puzzlebook2\Chain\ChainContext;
+use Puzzlebook2\Chain\Engine;
 use Puzzlebook2\Feasibility\FeasibilityAnalyzer;
+use Puzzlebook2\Rules\GeometricRules\CompoundTripleOnPageRule;
+use Puzzlebook2\Solver\Board;
+use Puzzlebook2\Solver\ReservationQueue;
+use Puzzlebook2\Solver\ReservationSlot;
 use Puzzlebook2\Solver\SolveOutcome;
 use Puzzlebook2\Solver\Solver;
 use Puzzlebook2Tests\Fixtures\TinyBoard;
@@ -257,6 +263,162 @@ if ($r6->isSuccess()) {
     if ($placedPair !== null) {
         check(abs($placedPair[0] - $placedPair[1]) === 1, 'pair words are horizontally adjacent');
     }
+}
+
+// --- Scenario 7: compound triple (whole = part + part) on one page ----
+// The three-cell Exact path for CompoundTripleOnPageRule. The prefix pool
+// holds a triple (LOOKOUT = LOOK + OUT); budget 3 => one triple wanted. The
+// generator must find three free cells on the page and the chooser pin the
+// three words. Then the finished board, read back THROUGH the rule, must
+// cross out exactly those three -- construction and elimination agreeing.
+line('');
+line('=== Scenario 7: compound triple on a page ===');
+
+$spec7 = new BoardSpec(pages: 1, rows: 1, cols: 3);
+$board7 = new Board($spec7);
+$ctx7 = new ChainContext(seed: 5, board: $board7, stepIndex: 0, budget: 3, prefixPool: ['lookout', 'look', 'out']);
+$rule7 = new CompoundTripleOnPageRule();
+$demand7 = $rule7->demand($ctx7);
+check($demand7->count === 1, "one triple wanted (count {$demand7->count})");
+
+$queue7 = new ReservationQueue();
+for ($i = 0; $i < $demand7->count; $i++) {
+    $queue7->push(new ReservationSlot($rule7, $demand7, $ctx7, $i));
+}
+$r7 = (new Solver())->solve($board7, $queue7);
+check($r7->isSuccess(), "solved (steps {$r7->stepsTaken}, backtracks {$r7->backtracks})");
+if ($r7->isSuccess()) {
+    $words7 = [];
+    foreach ($spec7->allCells() as $cell) {
+        $words7[$cell] = $r7->board->wordAt($cell);
+    }
+    $placed = array_values($words7);
+    sort($placed);
+    check($placed === ['look', 'lookout', 'out'], 'the triple is on the page: ' . implode(',', $placed));
+
+    $keep7 = [];
+    foreach ($spec7->allCells() as $cell) {
+        $keep7[$cell] = true;
+    }
+    $after7 = Engine::applyRule(array_values($words7), $spec7, $keep7, ['type' => 'CompoundTripleOnPageRule']);
+    $survivors7 = [];
+    foreach ($spec7->allCells() as $cell) {
+        if ($after7[$cell]) {
+            $survivors7[] = $words7[$cell];
+        }
+    }
+    check($survivors7 === [], 'rule crosses out all three (survivors: ' . (implode(',', $survivors7) ?: 'none') . ')');
+}
+
+// --- Scenario 8: reaction-blast family (needle triggers a geometric blast) --
+// Self-contained ReactionBlastRule subclasses: a word containing the needle is
+// crossed out together with a fixed footprint around it. Read a hand-built page
+// back through each rule and confirm the trigger AND exactly its footprint go,
+// while untouched cells survive.
+line('');
+line('=== Scenario 8: reaction-blast family ===');
+
+// Triggered rules are reactive: pre-cross the trigger (as some rule would, at
+// some point) and confirm the footprint then falls while the trigger is left to
+// its own killer -- never crossed by the blast itself.
+$blastCase = static function (int $rows, int $cols, int $tr, int $tc, string $trigger, string $type, int $expectVictims) use (&$failures): void {
+    $spec = new BoardSpec(pages: 1, rows: $rows, cols: $cols);
+    $center = $spec->linearIndex(0, $tr, $tc);
+    $words = [];
+    foreach ($spec->allCells() as $cell) {
+        $words[$cell] = $cell === $center ? $trigger : sprintf('inert%03d', $cell);
+    }
+    $keep = [];
+    foreach ($spec->allCells() as $cell) {
+        $keep[$cell] = true;
+    }
+    $keep[$center] = false; // the trigger has already been crossed, at some step
+    $after = Engine::applyRule(array_values($words), $spec, $keep, ['type' => $type]);
+    $newlyKilled = [];
+    foreach ($spec->allCells() as $cell) {
+        if ($keep[$cell] && !$after[$cell]) {
+            $newlyKilled[] = $cell;
+        }
+    }
+    check(!in_array($center, $newlyKilled, true), "{$type}: leaves the trigger to its killer");
+    check(count($newlyKilled) === $expectVictims, "{$type}: blast hit " . count($newlyKilled) . " victims (expect {$expectVictims})");
+};
+
+$blastCase(7, 5, 3, 2, 'popgun', 'PopBlastRule', 4);
+$blastCase(7, 5, 3, 2, 'powder', 'PowBlastRule', 4);
+$blastCase(7, 5, 3, 2, 'bangle', 'BangBlastRule', 8);
+$blastCase(7, 5, 3, 2, 'beamed', 'BeamBlastRule', 4);
+$blastCase(7, 5, 3, 2, 'diagram', 'DiagBlastRule', 8);
+$blastCase(7, 5, 3, 2, 'kaboom', 'BoomBlastRule', 8);
+$blastCase(9, 5, 4, 2, 'ringer', 'RingBlastRule', 16);
+
+// --- Scenario 9: reaction fixpoint / chain reaction (Engine::detonate) ------
+// A POP blast clears a cell that holds a BANG word; detonate() must then set the
+// BANG reaction off too (a chain reaction), reaching cells no single blast would.
+line('');
+line('=== Scenario 9: chain reaction (detonate fixpoint) ===');
+
+$spec9 = new BoardSpec(pages: 1, rows: 9, cols: 5);
+$pop9 = $spec9->linearIndex(0, 4, 2);     // popgun trigger (already crossed)
+$bang9 = $spec9->linearIndex(0, 4, 3);    // bang word, right of popgun = a POP victim
+$farUp = $spec9->linearIndex(0, 2, 3);    // two up from bang -- only BANG reaches it
+$words9 = [];
+foreach ($spec9->allCells() as $cell) {
+    $words9[$cell] = match ($cell) {
+        $pop9 => 'popgun',
+        $bang9 => 'bangle',
+        default => sprintf('inert%03d', $cell),
+    };
+}
+$board9 = new \Puzzlebook2\Solver\FilledBoard($spec9, $words9);
+$keep9 = [];
+foreach ($spec9->allCells() as $cell) {
+    $keep9[$cell] = true;
+}
+$keep9[$pop9] = false; // some step just crossed the POP trigger
+
+$reactions9 = [new \Puzzlebook2\Rules\GeometricRules\PopBlastRule(), new \Puzzlebook2\Rules\GeometricRules\BangBlastRule()];
+$after9 = Engine::detonate($reactions9, $board9, $keep9);
+
+check(!$after9[$bang9], 'POP blast crosses the BANG word next to the trigger');
+check(!$after9[$farUp], 'crossed BANG word then detonates (chain reaction reaches 2 cells away)');
+// Idempotence: detonating again changes nothing.
+$again9 = Engine::detonate($reactions9, $board9, $after9);
+check($again9 === $after9, 'detonate is idempotent at the fixpoint');
+
+// --- Scenario 10: PairOnPageRule base demand/construction -------------------
+// Drives the refactored PairOnPageRule archetype through its own demand: a
+// reversal pair drawn from the prefix survivors, placed on one page, then read
+// back through the rule to confirm both cross out. Exercises the shared
+// candidateGroups -> chooser -> StandingPatternConstraint path.
+line('');
+line('=== Scenario 10: PairOnPageRule construction (semordnilap) ===');
+
+$spec10 = new BoardSpec(pages: 1, rows: 1, cols: 2);
+$board10 = new Board($spec10);
+$ctx10 = new ChainContext(seed: 3, board: $board10, stepIndex: 0, budget: 2, prefixPool: ['straw', 'warts']);
+$rule10 = new \Puzzlebook2\Rules\GeometricRules\SemordnilapPairOnPageRule();
+$demand10 = $rule10->demand($ctx10);
+check($demand10->count === 1, "one pair wanted (count {$demand10->count})");
+
+$queue10 = new ReservationQueue();
+for ($i = 0; $i < $demand10->count; $i++) {
+    $queue10->push(new ReservationSlot($rule10, $demand10, $ctx10, $i));
+}
+$r10 = (new Solver())->solve($board10, $queue10);
+check($r10->isSuccess(), "solved (steps {$r10->stepsTaken}, backtracks {$r10->backtracks})");
+if ($r10->isSuccess()) {
+    $placed10 = [];
+    foreach ($spec10->allCells() as $cell) {
+        $placed10[$cell] = $r10->board->wordAt($cell);
+    }
+    $sorted10 = array_values($placed10);
+    sort($sorted10);
+    check($sorted10 === ['straw', 'warts'], 'the reversal pair is on the page: ' . implode(',', $sorted10));
+
+    $keep10 = array_fill(0, $spec10->size(), true);
+    $after10 = Engine::applyRule(array_values($placed10), $spec10, $keep10, ['type' => 'SemordnilapPairOnPageRule']);
+    check(Engine::countSurvivors($after10) === 0, 'rule crosses out both words of the pair');
 }
 
 line('');

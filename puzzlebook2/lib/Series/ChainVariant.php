@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Puzzlebook2\Series;
 
+use Puzzlebook2\Dictionary\RuleIndexCache;
+use Puzzlebook2\Rules\SpellingRuleBase;
 use Puzzlebook2\Solver\Rng;
 
 /**
@@ -48,98 +50,62 @@ final class ChainVariant
         ['DecoyLength9Rule', 'WordLength9Rule'],
     ];
 
-    /** Selectable rules: type => [family, dictionary supply]. (Absorber + final are reserved, not here.) */
-    private const POOL = [
-        'AbbaPatternRule' => ['shape', 18, 'once'],
-        'AnagramHalvesRule' => ['shape', 31, 'once'],
-        'NoVowelsRule' => ['letterset', 101, 'once'],
-        'RepeatedBlockRule' => ['shape', 107, 'once'],
-        'PalindromeRule' => ['shape', 108],
-        'MusicalNotesRule' => ['letterset', 127, 'once'],
-        'ContainsOughRule' => ['substring', 179],
-        'ThreeDistinctLettersRule' => ['shape', 208],
-        'RepeatedLetterRule' => ['doubles', 225],
-        'RstlneRule' => ['letterset', 254, 'once'],
-        'UsesOnlyLettersRule' => ['letterset', 258],
-        'ContainsSchRule' => ['substring', 266],
-        'AlternatingVowelRule' => ['vcrun', 277],
-        'ReverseAlphabeticalOrderRule' => ['order', 283],
-        'ContainsKnRule' => ['substring', 324],
-        'ContainsWrRule' => ['substring', 333],
-        'ContainsDgeRule' => ['substring', 334],
-        'ContainsSqRule' => ['substring', 349],
-        'AlphabeticalOrderRule' => ['order', 380],
-        'ContainsThrRule' => ['substring', 419],
-        'AllFiveVowelsRule' => ['hidden', 548],
-        'ContainsGhtRule' => ['substring', 576],
-        'ContainsNchRule' => ['substring', 581],
-        'ContainsRhRule' => ['substring', 596],
-        'ContainsSwRule' => ['substring', 620],
-        'ContainsTchRule' => ['substring', 635],
-        'BoggleRidgeRule' => ['boggle', 1008, 'once'],
-        'BoggleHeathRule' => ['boggle', 740, 'once'],
-        'BoggleBoxRule' => ['boggle', 669, 'once'],
-        'BoggleValeRule' => ['boggle', 614, 'once'],
-        'BoggleMarshRule' => ['boggle', 451, 'once'],
-        'BoggleReefRule' => ['boggle', 435, 'once'],
-        'BoggleMoorRule' => ['boggle', 382, 'once'],
-        'BoggleGladeRule' => ['boggle', 381, 'once'],
-        'BoggleFenRule' => ['boggle', 199, 'once'],
-        'ContainsWhRule' => ['substring', 729],
-        'ContainsOeRule' => ['substring', 751],
-        'ContainsSkRule' => ['substring', 776],
-        'AlphabetAdjacentEndsRule' => ['ends', 807],
-        'ContainsFrRule' => ['substring', 897],
-        'ConsecutiveAlphabetRunRule' => ['hidden', 967],
-        'ContainsNkRule' => ['substring', 1014],
-        'ContainsGhRule' => ['substring', 1050],
-        'ContainsSlRule' => ['substring', 1170],
-        'ContainsStrRule' => ['substring', 1171],
-        'ContainsTionRule' => ['substring', 1310],
-        'LetterCountRule' => ['length', 1331],
-        'ContainsMbRule' => ['substring', 1476],
-        'ContainsDrRule' => ['substring', 1545],
-        'ContainsFlRule' => ['substring', 1597],
-        'StackedDoublesRule' => ['doubles', 1602],
-        'DoubleEFewVowelsRule' => ['doubles', 1674],
-        'ContainsClRule' => ['substring', 1703],
-        'ContainsQuRule' => ['substring', 1762],
-        'ConsonantRunRule' => ['vcrun', 1938],
-        'ContainsMpRule' => ['substring', 1938],
-        'ContainsBrRule' => ['substring', 1953],
-        'ContainsGrRule' => ['substring', 1982],
-        'FourConsonantsOneVowelRule' => ['vcrun', 2142],
-        'AlternatingConsonantVowelRule' => ['vcrun', 2148],
-        'StartsWithTwoVowelsRule' => ['vcrun', 2269],
-        'ContainsPlRule' => ['substring', 2435],
-        'ContainsCrRule' => ['substring', 2577],
-        'HidesANumberRule' => ['hidden', 2584],
-        'ContainsSpRule' => ['substring', 2610],
-        'ContainsScRule' => ['substring', 2716],
-        'ContainsCkRule' => ['substring', 2867],
-        'ContainsPhRule' => ['substring', 3128],
-        'StraightLineLettersRule' => ['letterset', 3353],
-        'EndsWithIngRule' => ['ending', 3715],
-        'ContainsZRule' => ['substring', 3724],
-        'ContainsPrRule' => ['substring', 3836],
-        'ContainsBlRule' => ['substring', 3974],
-        'ContainsShRule' => ['substring', 4700],
-        'ContainsTrRule' => ['substring', 5281],
-        'ContainsChRule' => ['substring', 5541],
-        'BothEndPairsInSetRule' => ['ends', 5882],
-        'VowelRunRule' => ['vcrun', 6579],
-        'ContainsNgRule' => ['substring', 7181],
-        'VowelBothEndsRule' => ['ends', 7786],
-        'LongIsogramRule' => ['shape', 10600],
-        'DoubledConsonantRule' => ['doubles', 21282],
-        'WordLength10Rule' => ['length', 27928],
+    /**
+     * Curated family for each pool rule whose class name doesn't announce it.
+     * The big families are inferred from the name (Contains* => substring,
+     * Boggle* => boggle, Crossword* => crossword), so a new digraph / boggle /
+     * crossword rule needs no entry here at all -- just drop the class in.
+     */
+    private const FAMILY = [
+        'AbbaPatternRule' => 'shape', 'AnagramHalvesRule' => 'shape', 'RepeatedBlockRule' => 'shape',
+        'PalindromeRule' => 'shape', 'ThreeDistinctLettersRule' => 'shape', 'LongIsogramRule' => 'shape',
+        'NoVowelsRule' => 'letterset', 'MusicalNotesRule' => 'letterset', 'RstlneRule' => 'letterset',
+        'UsesOnlyLettersRule' => 'letterset', 'StraightLineLettersRule' => 'letterset',
+        'RepeatedLetterRule' => 'doubles', 'StackedDoublesRule' => 'doubles',
+        'DoubleEFewVowelsRule' => 'doubles', 'DoubledConsonantRule' => 'doubles',
+        'AlternatingVowelRule' => 'vcrun', 'ConsonantRunRule' => 'vcrun', 'FourConsonantsOneVowelRule' => 'vcrun',
+        'AlternatingConsonantVowelRule' => 'vcrun', 'StartsWithTwoVowelsRule' => 'vcrun', 'VowelRunRule' => 'vcrun',
+        'ReverseAlphabeticalOrderRule' => 'order', 'AlphabeticalOrderRule' => 'order',
+        'FirstTwoEqualLastTwoRule' => 'ends', 'AlphabetAdjacentEndsRule' => 'ends',
+        'BothEndPairsInSetRule' => 'ends', 'VowelBothEndsRule' => 'ends',
+        'AllFiveVowelsRule' => 'hidden', 'ConsecutiveAlphabetRunRule' => 'hidden', 'HidesANumberRule' => 'hidden',
+        'LetterCountRule' => 'length', 'WordLength10Rule' => 'length',
+        'EndsWithIngRule' => 'ending',
     ];
+
+    /** Selectable GEOMETRIC pool rules (opt-in; spelling rules are auto-discovered). type => [family, nominal supply]. */
+    private const GEOMETRIC_POOL = [
+        'CompoundTripleOnPageRule' => ['compound', 450],
+    ];
+
+    /** The four length finals (decoy + sweep) that are reserved, never selectable body rules. */
+    private const FINAL_TYPES = [
+        'DecoyLength6Rule', 'WordLength6Rule', 'DecoyLength7Rule', 'WordLength7Rule',
+        'DecoyLength8Rule', 'WordLength8Rule', 'DecoyLength9Rule', 'WordLength9Rule',
+    ];
+
+    /** Rules used at most once across the whole series (scarce showpieces). Boggle* are all 'once' by convention. */
+    private const SINGLE_USE = [
+        'CrosswordNightRule', 'CrosswordCanoeRule', 'AbbaPatternRule', 'AnagramHalvesRule',
+        'NoVowelsRule', 'RepeatedBlockRule', 'MusicalNotesRule', 'RstlneRule', 'CompoundTripleOnPageRule',
+    ];
+
+    /** Memoized derived pool: type => [family, supply, 'once'?]. @var array<string,array>|null */
+    private static ?array $poolCache = null;
+    /** @var string[]|null */
+    private static ?array $wordList = null;
+    private static ?string $wordListHash = null;
 
     /** Pairs that build fine together but overlap too much to be interesting in one book (not hard-incompatible). */
     private const AVOID_TOGETHER = [
         'DoubledConsonantRule' => ['StackedDoublesRule', 'RepeatedLetterRule'],
         'StackedDoublesRule' => ['DoubledConsonantRule'],
         'RepeatedLetterRule' => ['DoubledConsonantRule'],
+        // CrosswordBaggyRule (_a__y) is ~81% a sub-case of FourConsonantsOneVowelRule:
+        // its single vowel is usually the only vowel, so the 4C-1V rule eats most of
+        // its catches when both share a book. Keep them apart so each pulls its own weight.
+        'CrosswordBaggyRule' => ['FourConsonantsOneVowelRule'],
+        'FourConsonantsOneVowelRule' => ['CrosswordBaggyRule'],
     ];
 
     private const WORKHORSE_MIN_SUPPLY = 3000;
@@ -158,7 +124,7 @@ final class ChainVariant
     {
         $once = [];
         $reuse = [];
-        foreach (self::POOL as $type => $meta) {
+        foreach (self::pool() as $type => $meta) {
             if (($meta[2] ?? 'reuse') === 'once') {
                 $once[] = $type;
             } else {
@@ -185,13 +151,13 @@ final class ChainVariant
     /** A single book, ignoring cross-book single-use (for inspection/tests). */
     public static function forBook(int $bookNo, string $answer): array
     {
-        return self::compose($bookNo, 30, array_keys(self::POOL), [], $answer, $bookNo === self::REACTION_BOOK);
+        return self::compose($bookNo, 30, array_keys(self::pool()), [], $answer, $bookNo === self::REACTION_BOOK);
     }
 
     /** The Capstone, standalone: leaner (fewer, chunkier rules). */
     public static function forCapstone(string $answer): array
     {
-        return self::compose(9001, 20, array_keys(self::POOL), [], $answer, false);
+        return self::compose(9001, 20, array_keys(self::pool()), [], $answer, false);
     }
 
     /**
@@ -228,10 +194,10 @@ final class ChainVariant
         $substrings = 0;
         $workhorses = 0;
         foreach ($selected as $s) {
-            if (self::POOL[$s][0] === 'substring') {
+            if (self::pool()[$s][0] === 'substring') {
                 $substrings++;
             }
-            if (self::POOL[$s][1] >= self::WORKHORSE_MIN_SUPPLY) {
+            if (self::pool()[$s][1] >= self::WORKHORSE_MIN_SUPPLY) {
                 $workhorses++;
             }
         }
@@ -254,7 +220,7 @@ final class ChainVariant
             if (in_array($cand, $selected, true)) {
                 continue; // already seeded (a single-use rule assigned to this book)
             }
-            $fam = self::POOL[$cand][0];
+            $fam = self::pool()[$cand][0];
             if ($fam === 'substring' && $substrings >= $maxSubstring) {
                 continue;
             }
@@ -265,7 +231,7 @@ final class ChainVariant
             if ($fam === 'substring') {
                 $substrings++;
             }
-            if (self::POOL[$cand][1] >= self::WORKHORSE_MIN_SUPPLY) {
+            if (self::pool()[$cand][1] >= self::WORKHORSE_MIN_SUPPLY) {
                 $workhorses++;
             }
         }
@@ -276,7 +242,7 @@ final class ChainVariant
                 if ($workhorses >= 3) {
                     break;
                 }
-                if (in_array($cand, $selected, true) || self::POOL[$cand][1] < self::WORKHORSE_MIN_SUPPLY || !$canAdd($cand)) {
+                if (in_array($cand, $selected, true) || self::pool()[$cand][1] < self::WORKHORSE_MIN_SUPPLY || !$canAdd($cand)) {
                     continue;
                 }
                 $selected[] = $cand;
@@ -287,8 +253,14 @@ final class ChainVariant
     }
 
     /**
-     * Order the selection so no two adjacent rules share a family (greedy: always
-     * take the most-plentiful family that is not the previous one).
+     * Order the selection SCARCE-FIRST while keeping no two adjacent rules in the
+     * same family. Supply-aware ordering matters because a scarce rule placed behind
+     * a high-supply workhorse has most of its catches eaten before its turn -- e.g.
+     * CrosswordBaggy saw only 5 of its 53 board matches survive to a late slot. So at
+     * each step we take the lowest-supply next rule, EXCEPT when a family is big enough
+     * that deferring it would strand it against the adjacency rule, in which case we
+     * drain the most-plentiful family first (the old behaviour, kept for feasibility).
+     * An occasional same-family repeat is tolerated as a last resort, exactly as before.
      *
      * @param string[] $types
      * @return string[]
@@ -297,25 +269,52 @@ final class ChainVariant
     {
         $byFam = [];
         foreach ($types as $t) {
-            $byFam[self::POOL[$t][0]][] = $t;
+            $byFam[self::pool()[$t][0]][] = $t;
         }
+        // Within a family, order so array_pop() yields the scarcest member first:
+        // sort by supply descending, a deterministic shuffle breaking ties.
         foreach ($byFam as $f => $list) {
-            $byFam[$f] = Rng::shuffle($list, $seed + (int) (crc32($f) & 0x7fffffff));
+            $list = Rng::shuffle($list, $seed + (int) (crc32($f) & 0x7fffffff));
+            usort($list, static fn (string $a, string $b): int => self::pool()[$b][1] <=> self::pool()[$a][1]);
+            $byFam[$f] = $list;
         }
 
         $out = [];
         $lastFam = null;
         $n = count($types);
         while (count($out) < $n) {
+            $remaining = $n - count($out);
+            $globalMax = 0;
+            foreach ($byFam as $list) {
+                $globalMax = max($globalMax, count($list));
+            }
+            // Slack test: if even after spending this slot elsewhere the biggest family
+            // can still be spaced out (2*max <= remaining), we are free to pick by supply.
+            $free = 2 * $globalMax <= $remaining;
+
             $best = null;
-            $bestCount = -1;
-            foreach ($byFam as $f => $list) {
-                if ($f === $lastFam || $list === []) {
-                    continue;
+            if ($free) {
+                $bestSupply = PHP_INT_MAX; // scarce-first: lowest-supply next member
+                foreach ($byFam as $f => $list) {
+                    if ($f === $lastFam || $list === []) {
+                        continue;
+                    }
+                    $supply = self::pool()[$list[count($list) - 1]][1];
+                    if ($supply < $bestSupply) {
+                        $bestSupply = $supply;
+                        $best = $f;
+                    }
                 }
-                if (count($list) > $bestCount) {
-                    $bestCount = count($list);
-                    $best = $f;
+            } else {
+                $bestCount = -1; // feasibility: drain the most-plentiful family first
+                foreach ($byFam as $f => $list) {
+                    if ($f === $lastFam || $list === []) {
+                        continue;
+                    }
+                    if (count($list) > $bestCount) {
+                        $bestCount = count($list);
+                        $best = $f;
+                    }
                 }
             }
             if ($best === null) { // only the previous family remains -- unavoidable repeat
@@ -341,7 +340,8 @@ final class ChainVariant
      */
     private static function seedKeepFractions(array $types): array
     {
-        $maxPer = 1300;               // ceiling for any one body rule (~10% of board)
+        $maxPer = 800;                // ceiling for any one body rule (~6.4% of board) -- no single rule dominates
+        $floor = 120;                 // minimum budget for any body rule, so the middle never starves
         $reserve = 500;               // small leftover for the absorber to soak
         $target = (int) (self::BOARD_REF * 0.98) - $reserve;
 
@@ -349,15 +349,23 @@ final class ChainVariant
         $caps = [];
         $weights = [];
         foreach ($types as $t) {
-            $caps[$t] = min((int) floor(0.7 * self::POOL[$t][1]), $maxPer);
-            $weights[$t] = self::POOL[$t][1];
+            $caps[$t] = min((int) floor(0.7 * self::pool()[$t][1]), $maxPer);
+            $weights[$t] = self::pool()[$t][1];
         }
 
-        // Water-fill proportional to supply, respecting each rule's cap: high-supply
-        // rules fill to the cap, the remainder is shared out by supply.
-        $budgets = array_fill_keys($types, 0);
-        $active = $types;
+        // Seed every rule at the floor (clamped by its own cap, since a scarce rule
+        // cannot supply more than ~0.7 of its dictionary cardinality), then water-fill
+        // the remainder. Floor + a lower cap compress the spread from ~260x to <7x.
+        $budgets = [];
         $remaining = $target;
+        foreach ($types as $t) {
+            $budgets[$t] = min($floor, $caps[$t]);
+            $remaining -= $budgets[$t];
+        }
+
+        // Water-fill the remainder proportional to supply, respecting each rule's cap:
+        // high-supply rules fill toward the cap, the rest is shared out by supply.
+        $active = array_values(array_filter($types, static fn (string $t): bool => $budgets[$t] < $caps[$t]));
         for ($iter = 0; $iter < 20 && $remaining > 0 && $active !== []; $iter++) {
             $wsum = 0;
             foreach ($active as $t) {
@@ -452,8 +460,140 @@ final class ChainVariant
     /** @return string[] the INCOMPATIBLE_WITH list declared on a rule class, if any. */
     private static function incompatibles(string $type): array
     {
-        $fqcn = self::NS . $type;
-        $const = $fqcn . '::INCOMPATIBLE_WITH';
-        return defined($const) ? constant($const) : [];
+        // A pool rule may live under SpellingRules or GeometricRules (the
+        // compound-triple showpiece is geometric), so look in both.
+        foreach ([self::NS, 'Puzzlebook2\\Rules\\GeometricRules\\'] as $ns) {
+            $const = $ns . $type . '::INCOMPATIBLE_WITH';
+            if (defined($const)) {
+                return constant($const);
+            }
+        }
+        return [];
+    }
+
+    /**
+     * The selectable pool, derived once: every concrete spelling rule (auto-
+     * discovered from the SpellingRules directory, minus the reserved length
+     * finals) plus the opt-in geometric pool rules. Each entry is
+     * [family, supply, 'once'?] -- the exact shape the old hand-maintained POOL
+     * constant had, but family comes from naming/curation and supply is computed
+     * and cached, so adding a rule means dropping in the class (and, only for a
+     * curated family, one FAMILY line) -- never hand-typing a cardinality.
+     *
+     * @return array<string,array{0:string,1:int,2?:string}>
+     */
+    private static function pool(): array
+    {
+        if (self::$poolCache !== null) {
+            return self::$poolCache;
+        }
+        $finals = array_fill_keys(self::FINAL_TYPES, true);
+        $out = [];
+        foreach (glob(dirname(__DIR__) . '/Rules/SpellingRules/*.php') ?: [] as $file) {
+            $type = basename($file, '.php');
+            if (isset($finals[$type])) {
+                continue;
+            }
+            $class = self::NS . $type;
+            if (!class_exists($class)) {
+                continue;
+            }
+            $rc = new \ReflectionClass($class);
+            if (!$rc->isInstantiable() || !$rc->isSubclassOf(SpellingRuleBase::class)) {
+                continue;
+            }
+            $entry = [self::familyOf($type), self::supplyFor($type)];
+            if (self::isOnce($type)) {
+                $entry[] = 'once';
+            }
+            $out[$type] = $entry;
+        }
+        foreach (self::GEOMETRIC_POOL as $type => [$family, $supply]) {
+            $entry = [$family, $supply];
+            if (self::isOnce($type)) {
+                $entry[] = 'once';
+            }
+            $out[$type] = $entry;
+        }
+        return self::$poolCache = $out;
+    }
+
+    /** Family from the class name where it announces one, else the curated map; unknown is a loud error. */
+    private static function familyOf(string $type): string
+    {
+        if (str_starts_with($type, 'Contains')) {
+            return 'substring';
+        }
+        if (str_starts_with($type, 'Boggle')) {
+            return 'boggle';
+        }
+        if (str_starts_with($type, 'Crossword')) {
+            return 'crossword';
+        }
+        if (isset(self::FAMILY[$type])) {
+            return self::FAMILY[$type];
+        }
+        if (isset(self::GEOMETRIC_POOL[$type])) {
+            return self::GEOMETRIC_POOL[$type][0];
+        }
+        throw new \LogicException(
+            "Pool rule '{$type}' has no family: name it Contains*/Boggle*/Crossword*, or add it to ChainVariant::FAMILY."
+        );
+    }
+
+    private static function isOnce(string $type): bool
+    {
+        return str_starts_with($type, 'Boggle') || in_array($type, self::SINGLE_USE, true);
+    }
+
+    /**
+     * How many dictionary words this rule crosses out -- the supply weight the
+     * cascade orders and budgets by. Computed for spelling rules (and disk-cached
+     * via RuleIndexCache, keyed on the rule's own code and the word list, so it is
+     * recomputed only when one of those changes); declared for geometric pool
+     * rules, whose "supply" is not a word-by-word cardinality.
+     */
+    private static function supplyFor(string $type): int
+    {
+        if (isset(self::GEOMETRIC_POOL[$type])) {
+            return self::GEOMETRIC_POOL[$type][1];
+        }
+        $class = self::NS . $type;
+        /** @var SpellingRuleBase $rule */
+        $rule = new $class();
+        $words = self::wordList();
+        $cached = RuleIndexCache::remember(
+            $class,
+            'supply',
+            self::wordListHash(),
+            static function () use ($rule, $words): array {
+                $n = 0;
+                foreach ($words as $w) {
+                    if ($rule->failsWord($w)) {
+                        $n++;
+                    }
+                }
+                return ['n' => $n];
+            },
+        );
+        return (int) ($cached['n'] ?? 0);
+    }
+
+    /** @return string[] */
+    private static function wordList(): array
+    {
+        if (self::$wordList === null) {
+            $path = dirname(__DIR__, 2) . '/data/wordlist.txt';
+            $raw = is_file($path) ? (string) file_get_contents($path) : '';
+            self::$wordList = array_values(array_filter(array_map('trim', explode("\n", $raw)), static fn (string $w): bool => $w !== ''));
+            self::$wordListHash = hash('xxh3', implode("\n", self::$wordList));
+        }
+        return self::$wordList;
+    }
+
+    private static function wordListHash(): string
+    {
+        self::wordList();
+        return self::$wordListHash ?? '';
     }
 }
